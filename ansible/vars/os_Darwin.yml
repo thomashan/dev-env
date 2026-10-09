@@ -1,0 +1,20 @@
+---
+# macOS. Host-provided reality (verified): Apple /usr/bin/make is GNU Make 3.81,
+# Homebrew prefix /opt/homebrew (arm64). The package backend itself is derived
+# in the bootstrap role (Darwin -> brew), so it is not overridden here.
+devenv_become_package_install: false
+
+# Shipped by the OS / no Homebrew formula -- excluded from install lists.
+devenv_pkg_skip:
+  - unzip
+
+devenv_brew_taps: []
+
+# GUI apps, off unless devenv_install_gui_casks: true. Miniforge is NOT a cask
+# here on purpose: the conda role installs it to {{ devenv_conda_dir }} so the
+# path is identical to Linux (a cask would pin it to /opt/homebrew/Caskroom/...).
+devenv_casks:
+  - docker-desktop
+
+# Neovim source for this platform (see comment in group_vars/all.yml)
+devenv_neovim_source: package

@@ -1,0 +1,62 @@
+---
+# uv is the cross-OS answer for python tools: the same `uv tool install`
+# line works on macOS and Linux, which keeps tool installs out of brew/apt.
+
+- name: Ensure the download cache exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.cache/dev-env"
+    state: directory
+    mode: "0755"
+
+- name: Download the uv installer
+  ansible.builtin.get_url:
+    url: https://astral.sh/uv/install.sh
+    dest: "{{ devenv_home }}/.cache/dev-env/uv-install.sh"
+    mode: "0755"
+
+- name: Install uv
+  ansible.builtin.command:
+    cmd: /bin/bash "{{ devenv_home }}/.cache/dev-env/uv-install.sh"
+    creates: "{{ devenv_home }}/.local/bin/uv"
+  environment:
+    INSTALLER_NO_MODIFY_PATH: "1"
+
+- name: Locate uv
+  ansible.builtin.stat:
+    path: "{{ devenv_home }}/.local/bin/uv"
+  register: devenv_uv_bin
+
+- name: Assert uv is present
+  ansible.builtin.assert:
+    that: devenv_uv_bin.stat.exists
+    fail_msg: "uv install failed; ~/.local/bin/uv missing"
+    quiet: true
+
+- name: Ensure the pinned CPython is available for uv tools
+  ansible.builtin.command:
+    cmd: "{{ devenv_home }}/.local/bin/uv python install {{ devenv_python_version }}"
+  register: devenv_uv_python
+  changed_when: "'Installed' in devenv_uv_python.stdout or 'Downloading' in devenv_uv_python.stderr"
+
+- name: Install python tools
+  ansible.builtin.command:
+    cmd: >-
+      {{ devenv_home }}/.local/bin/uv tool install
+      --python {{ devenv_python_version }} {{ item }}
+  loop: "{{ devenv_uv_tools }}"
+  register: devenv_uv_tool
+  changed_when: "'Installed' in devenv_uv_tool.stdout or 'Updated' in devenv_uv_tool.stdout"
+  failed_when:
+    - devenv_uv_tool.rc != 0
+    - "'already installed' not in (devenv_uv_tool.stderr | default(''))"
+
+# The package name is derived from the checkout's pyproject.toml rather than
+# hardcoded, so this task cannot drift from upstream.
+- name: Install the holon CLI from a local checkout
+  ansible.builtin.command:
+    cmd: >-
+      {{ devenv_home }}/.local/bin/uv tool install --editable
+      {{ devenv_holon_source }}/{{ devenv_holon_subdir }}
+  when: devenv_holon_source | length > 0
+  register: devenv_holon
+  changed_when: "'Installed' in devenv_holon.stdout or 'Updated' in devenv_holon.stdout"

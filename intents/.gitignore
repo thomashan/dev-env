@@ -1,0 +1,6 @@
+# Draft intents are working files. The permanent record is
+# holon-knowledge/ledger/intents.jsonl (append-only, committed).
+*.json
+*.yaml
+*.yml
+!.gitignore

@@ -1,0 +1,5 @@
+---
+# Installed by `make bootstrap-ansible` into ~/.local/share/dev-env/collections
+collections:
+  - name: community.general
+    version: ">=9.0.0"

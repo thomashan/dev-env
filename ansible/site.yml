@@ -1,0 +1,24 @@
+---
+# Whole-environment converge. Invoked through `make install` / `make check-mode`
+# so DEVENV_PYTHON and ANSIBLE_COLLECTIONS_PATH are exported consistently.
+#
+# Order matters:
+#   bootstrap -> classify host and load alias tables (fails early otherwise)
+#   homebrew/packages -> tools that everything else shells out to
+#   dotfiles  -> links must exist before conda/node/neovim/fish validate them
+#   uv/conda/node/neovim/fish -> runtimes and their assertions
+- name: Set up the dev environment
+  hosts: control
+  gather_facts: true
+  roles:
+    # bootstrap carries 'always' so scoped runs (--tags dotfiles, node, ...)
+    # still get the platform facts and alias tables it resolves.
+    - { role: bootstrap, tags: [bootstrap, always] }
+    - { role: homebrew, when: "devenv_pkg_backend == 'brew'", tags: [packages, macos] }
+    - { role: packages, tags: [packages] }
+    - { role: dotfiles, tags: [dotfiles] }
+    - { role: uv, tags: [uv] }
+    - { role: conda, tags: [conda] }
+    - { role: node, tags: [node] }
+    - { role: neovim, tags: [neovim] }
+    - { role: fish, tags: [fish] }

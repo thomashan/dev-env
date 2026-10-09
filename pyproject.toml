@@ -1,0 +1,35 @@
+# dev-env is a *virtual* project: it owns no importable package. Its
+# dependencies are the tools the environment is built from, which is what makes
+# `make test` and CI reproducible instead of "whatever python is on PATH".
+[project]
+name = "dev-env"
+version = "0.1.0"
+description = "Repository-owned development environment: make bootstraps Ansible, Ansible converges"
+requires-python = "==3.13.*"
+dependencies = [
+  "ansible-core>=2.19",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3",
+  "pytest-xdist>=3.6",
+  "ansible-lint>=25.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "templating: evaluates Jinja expressions taken verbatim from the roles",
+  "manifest: structural invariants of the declarative manifest",
+  "network: reaches a public upstream to confirm release asset names exist",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"

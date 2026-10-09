@@ -1,0 +1,77 @@
+---
+# nvm owns node -- nothing installs node directly. nvm.fish is the nvm
+# implementation because fish is the login shell; the `current` symlink written
+# here is what puts node on PATH for non-interactive shells too (nvm.fish only
+# auto-activates in interactive sessions).
+
+- name: Read the node version pin from the dotfiles (single source of truth)
+  ansible.builtin.slurp:
+    src: "{{ devenv_repo_root }}/dotfiles/.config/fish/conf.d/00-devenv.fish"
+  register: devenv_fish_pins
+
+# Ansible's regex_search returns the whole match unless a group is requested,
+# so pull the line out first and strip the assignment instead of trusting a
+# capture group.
+- name: Parse the pin
+  ansible.builtin.set_fact:
+    devenv_node_version: >-
+      {{ (devenv_fish_pins.content | b64decode).splitlines()
+         | select('match', 'set -g devenv_node_default_version [0-9]')
+         | map('split') | map('last') | first }}
+
+- name: Assert a node pin was found
+  ansible.builtin.assert:
+    that: devenv_node_version | length > 0
+    fail_msg: "Could not parse devenv_node_default_version from dotfiles/.config/fish/conf.d/00-devenv.fish"
+    quiet: true
+
+- name: Ensure the fisher path exists (plugin payloads stay out of the repo)
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.config/fish/local/functions"
+    state: directory
+    mode: "0755"
+
+- name: Install the fisher function
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish
+    dest: "{{ devenv_home }}/.config/fish/local/functions/fisher.fish"
+    mode: "0644"
+
+- name: Sync fisher plugins from dotfiles/.config/fish/fish_plugins
+  ansible.builtin.command:
+    cmd: fish -c "fisher update"
+  register: devenv_fisher
+  changed_when: "'installed' in devenv_fisher.stdout | lower or 'updated' in devenv_fisher.stdout | lower or 'removed' in devenv_fisher.stdout | lower"
+  tags: [fisher]
+
+- name: Install the pinned node through nvm
+  ansible.builtin.command:
+    cmd: fish -c "nvm install {{ devenv_node_version }}"
+    creates: "{{ devenv_home }}/.local/share/nvm/v{{ devenv_node_version }}/bin/node"
+
+- name: Point `current` at the pinned version (PATH entry for non-interactive shells)
+  ansible.builtin.file:
+    src: "{{ devenv_home }}/.local/share/nvm/v{{ devenv_node_version }}"
+    dest: "{{ devenv_home }}/.local/share/nvm/current"
+    state: link
+    force: true
+
+- name: Verify which node a login shell resolves
+  ansible.builtin.command:
+    cmd: fish -lc "which node; node -v"
+  register: devenv_node_which
+  changed_when: false
+
+- name: Assert nvm-managed node wins on PATH
+  ansible.builtin.assert:
+    that:
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which.stdout"
+      - "'v' ~ devenv_node_version in devenv_node_which.stdout"
+    fail_msg: |
+      node did not resolve through nvm. Resolved:
+      {{ devenv_node_which.stdout_lines | join(' | ') }}
+      Likely cause: another PATH entry (brew node, ~/.local/bin/node from an
+      agent runtime) precedes $XDG_DATA_HOME/nvm/current/bin. Fix the PATH
+      order in dotfiles/.config/fish/config.fish or remove the competitor with
+      devenv_remove_unmanaged: true.
+    quiet: true

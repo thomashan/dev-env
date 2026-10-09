@@ -1,0 +1,111 @@
+---
+# Symlink the repo into $HOME. Only paths listed in devenv_links are touched,
+# so ~/.config itself is never linked wholesale and other apps' config is safe.
+
+- name: Timestamp for this run's backups
+  ansible.builtin.set_fact:
+    devenv_backup_dir: "{{ devenv_home }}/.local/share/dev-env/backup/{{ ansible_facts.date_time.iso8601_basic_short }}"
+  when: devenv_backup_dotfiles | bool
+
+# Validated up front: a directory source would either clobber a populated
+# destination or be silently half-managed, so the manifest must list files.
+- name: Inspect the repository sources
+  ansible.builtin.stat:
+    path: "{{ devenv_repo_root }}/{{ item.src }}"
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.src }}"
+  register: devenv_src_stat
+
+- name: Assert every manifest entry is a real file in this repo
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists | default(false)
+      - not (item.stat.isdir | default(true))
+    fail_msg: >-
+      {{ item.item.src }} is {{ 'missing' if not (item.stat.exists | default(false)) else 'a directory' }}.
+      devenv_links must list individual files so that files from other tools
+      living in the same destination directory are never displaced.
+    quiet: true
+  loop: "{{ devenv_src_stat.results }}"
+  loop_control:
+    label: "{{ item.item.src }}"
+
+- name: Ensure link destinations have parent directories
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.dest | dirname }}"
+
+- name: Inspect current destinations
+  ansible.builtin.stat:
+    path: "{{ item.dest }}"
+  register: devenv_dest_stat
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Move an unmanaged real file out of the way before linking
+  ansible.builtin.command:
+    cmd: /bin/mv "{{ item.item.dest }}" "{{ devenv_backup_dir }}/{{ item.item.dest | regex_replace('^/', '') | regex_replace('/', '__') }}"
+  loop: "{{ devenv_dest_stat.results }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when:
+    - devenv_backup_dotfiles | bool
+    - item.stat.exists
+    - not item.stat.islnk
+  changed_when: true
+
+- name: Back up, then report what was displaced
+  ansible.builtin.debug:
+    msg: >-
+      Displaced {{ (devenv_dest_stat.results | rejectattr('stat.islnk', 'defined') | list | length) }}
+      unmanaged path(s) into {{ devenv_backup_dir | default('(backups disabled)') }} --
+      real files/dirs found where links belong:
+      {{ devenv_dest_stat.results | selectattr('stat.exists') | rejectattr('stat.islnk') | map(attribute='item.dest') | join(', ') | default('none', true) }}
+
+- name: Create parent directories again (a moved directory took them with it)
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.dest | dirname }}"
+
+- name: Link repo files into the home directory
+  ansible.builtin.file:
+    src: "{{ devenv_repo_root }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: true
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+# Post-conditions are only meaningful after links were actually created; in a
+# dry run nothing was linked, so verifying would report false failures.
+- name: Verify every managed path is a link into this repository
+  ansible.builtin.stat:
+    path: "{{ item.dest }}"
+  register: devenv_link_check
+  loop: "{{ devenv_links }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  when: not ansible_check_mode
+
+- name: Assert the link manifest is fully satisfied
+  ansible.builtin.assert:
+    that:
+      - item.stat.islnk | default(false)
+      - item.stat.lnk_source | default('') | regex_escape | regex_search((devenv_repo_root | regex_escape))
+    fail_msg: "{{ item.item.dest }} is not a symlink into {{ devenv_repo_root }}"
+    quiet: true
+  loop: "{{ devenv_link_check.results | default([], true) }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  when: not ansible_check_mode

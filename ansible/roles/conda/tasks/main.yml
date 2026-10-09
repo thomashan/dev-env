@@ -1,0 +1,63 @@
+---
+# Miniforge, not Anaconda, and installed to the SAME path on every OS so
+# dotfiles/.config/fish/config.fish needs no OS branch for conda.
+# community.general has no conda/miniforge module (verified upstream), so the
+# upstream installer is fetched with get_url and run under a `creates:` guard.
+
+- name: Pick the Miniforge installer for this platform
+  ansible.builtin.set_fact:
+    devenv_conda_installer: >-
+      Miniforge3-{{ devenv_miniforge_asset_os[devenv_system] }}-{{ devenv_miniforge_asset_arch[devenv_system][devenv_arch] }}.sh
+
+- name: Ensure the download cache exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.cache/dev-env"
+    state: directory
+    mode: "0755"
+
+- name: Download the Miniforge installer
+  ansible.builtin.get_url:
+    # devenv_miniforge_release defaults to 'latest'; pin it (e.g. "25.1.0-1") in
+    # group_vars/all.yml once a release is known good, so rebuilds are reproducible.
+    url: "https://github.com/conda-forge/miniforge/releases/{{ devenv_conda_release }}/download/{{ devenv_conda_installer }}"
+    dest: "{{ devenv_home }}/.cache/dev-env/{{ devenv_conda_installer }}"
+    mode: "0755"
+
+- name: Install Miniforge into {{ devenv_conda_dir }}
+  ansible.builtin.command:
+    cmd: /bin/bash "{{ devenv_home }}/.cache/dev-env/{{ devenv_conda_installer }}" -b -u -p "{{ devenv_conda_dir }}"
+    creates: "{{ devenv_conda_dir }}/bin/conda"
+
+- name: Record the conda executable
+  ansible.builtin.set_fact:
+    devenv_conda_bin: "{{ devenv_conda_dir }}/bin/conda"
+
+- name: Assert conda is runnable
+  ansible.builtin.command:
+    cmd: "{{ devenv_conda_bin }} --version"
+  register: devenv_conda_version
+  changed_when: false
+
+- name: Show conda version
+  ansible.builtin.debug:
+    msg: "{{ devenv_conda_version.stdout }}"
+
+- name: Inspect ~/.condarc
+  ansible.builtin.stat:
+    path: "{{ devenv_home }}/.condarc"
+  register: devenv_condarc
+- name: Assert .condarc is repo-managed before conda writes to it
+  ansible.builtin.assert:
+    that:
+      - devenv_condarc.stat.islnk | default(false)
+    fail_msg: "~/.condarc must be the repo-managed symlink; run the dotfiles role first"
+    quiet: true
+
+- name: Create conda environments
+  ansible.builtin.command:
+    cmd: >-
+      {{ devenv_conda_bin }} create -y -n {{ item.name }} python={{ item.python | default(devenv_conda_env_python) }}
+    creates: "{{ devenv_conda_dir }}/envs/{{ item.name }}/bin/python"
+  loop: "{{ devenv_conda_envs }}"
+  loop_control:
+    label: "{{ item.name }}"

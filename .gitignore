@@ -1,0 +1,30 @@
+.idea
+*.iml
+
+# Holon
+.venv/
+.holon-cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# --- Ansible ---
+*.retry
+.ansible/
+
+# Draft intents (see intents/.gitignore and holon-knowledge/ledger/)
+intents/*.json
+intents/*.yaml
+
+# --- fish runtime state that must never be committed ---
+# Plugin payloads land in $fisher_path (local/); fish_variables is machine-local.
+dotfiles/.config/fish/local/
+dotfiles/.config/fish/fish_variables
+dotfiles/.config/fish/completions/
+dotfiles/.config/fish/functions/
+dotfiles/.config/fish/conf.d/sdk.fish
+dotfiles/.config/fish/conf.d/nvm.fish
+
+# --- downloaded installers ---
+.cache/
