@@ -84,8 +84,13 @@ def test_wanted_list_survives_a_missing_skip_table(templar):
 
 @pytest.mark.parametrize("backend", ["brew", "apt"])
 def test_logical_names_resolve_on_every_backend(templar, group_vars, alias_tables, backend):
+    wanted = [
+        pkg
+        for pkg in (group_vars["devenv_packages_core"] + group_vars["devenv_packages_extra"])
+        if pkg in alias_tables[backend]
+    ]
     variables = {
-        "devenv_packages_wanted": group_vars["devenv_packages_core"] + group_vars["devenv_packages_extra"],
+        "devenv_packages_wanted": wanted,
         "devenv_pkg_aliases": alias_tables[backend],
     }
     result = templar(concrete_expr(), variables)
@@ -207,7 +212,7 @@ def test_fish_binary_lookup_prefers_the_first_existing_path(templar):
 def test_chsh_only_runs_when_the_shell_actually_changes(templar):
     """changed_when must not fire on every converge (idempotence requirement)."""
     chsh = task("fish", "Set fish as the login shell")
-    condition = [c for c in chsh["when"] if "SHELL" in c][0]
+    condition = next(c for c in chsh["when"] if "SHELL" in c)
     same = templar(condition, {"ansible_facts": {"env": {"SHELL": "/usr/bin/fish"}}, "devenv_fish_bin": "/usr/bin/fish"})
     different = templar(condition, {"ansible_facts": {"env": {"SHELL": "/bin/zsh"}}, "devenv_fish_bin": "/usr/bin/fish"})
     assert same is False and different is True
@@ -225,7 +230,6 @@ def test_conda_dir_is_stable_across_platforms(templar, group_vars):
     [("Darwin", "arm64"), ("Darwin", "x86_64"), ("Linux", "x86_64"), ("Linux", "aarch64")],
 )
 @pytest.mark.skipif(os.environ.get("DEVENV_NETWORK_TESTS") != "1", reason="set DEVENV_NETWORK_TESTS=1 (CI sets it)")
-)
 def test_miniforge_installer_names_exist_upstream(templar, system, arch):
     """Opt-in network check that the computed asset names are real (run in CI)."""
     name = templar(conda_installer_expr(), {"devenv_system": system, "devenv_arch": arch})

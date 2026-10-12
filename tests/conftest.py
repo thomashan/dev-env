@@ -55,7 +55,7 @@ def link_manifest(group_vars) -> list[dict]:
 
 
 @pytest.fixture(scope="session")
-def templar():
+def templar(group_vars: dict):
     """Ansible's own templating engine, with its real filter plugin set."""
     from ansible.parsing.dataloader import DataLoader
     from ansible.template import Templar, trust_as_template
@@ -67,8 +67,14 @@ def templar():
         # and it is what a playbook does implicitly when it reads its own tasks.
         # convert_bare=True is required: `when:` clauses and assert items are
         # written bare (devenv_x not in y) rather than as {{ ... }} templates.
-        return Templar(loader=DataLoader(), variables=variables).template(
-            trust_as_template(expression),
+        ctx = dict(group_vars)
+        ctx.update(variables)
+        t = Templar(loader=DataLoader(), variables=ctx)
+        trusted = trust_as_template(expression)
+        if not t.is_possibly_template(expression):
+            return t.evaluate_expression(trusted)
+        return t.template(
+            trusted,
             convert_bare=True,
         )
 

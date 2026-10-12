@@ -17,11 +17,12 @@
     devenv_node_version: >-
       {{ (devenv_fish_pins.content | b64decode).splitlines()
          | select('match', 'set -g devenv_node_default_version [0-9]')
-         | map('split') | map('last') | first }}
+         | map('split') | map('last') | first | default('') }}
 
 - name: Assert a node pin was found
   ansible.builtin.assert:
-    that: devenv_node_version | length > 0
+    that:
+      - devenv_node_version | length > 0
     fail_msg: "Could not parse devenv_node_default_version from dotfiles/.config/fish/conf.d/00-devenv.fish"
     quiet: true
 

@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import re
 import subprocess
-from pathlib import Path
 
 import pytest
 import yaml
 
-from .conftest import REPO_ROOT, VERSION_RE, read, role_files, role_task_files
+from .conftest import REPO_ROOT, VERSION_RE, read, role_task_files
 
 pytestmark = pytest.mark.manifest
 
@@ -154,8 +153,8 @@ def test_dotfiles_hardcode_no_per_user_paths():
         # /home/linuxbrew is the fixed Linuxbrew prefix, not a user home.
         stray = re.findall(r"(?<![\w.])/home/(?!linuxbrew)[\w./-]+", code)
         assert not stray, f"{rel} hardcodes a Linux home path: {stray}"
-        if "/opt/homebrew" in text or "/usr/local/bin/brew" in text:
-            assert "case Darwin" in text, f"{rel} uses a macOS path without an OS switch"
+        if "/opt/homebrew" in code or "/usr/local/bin/brew" in code:
+            assert "case Darwin" in code, f"{rel} uses a macOS path without an OS switch"
 
 
 def test_conda_path_parity_between_ansible_and_fish(group_vars):
@@ -221,7 +220,7 @@ def test_every_task_uses_a_fully_qualified_module_name():
 
 def test_every_role_is_wired_into_the_playbook():
     site = yaml.safe_load(read(REPO_ROOT / "ansible" / "site.yml"))
-    wired = {list(entry.values())[0] if isinstance(entry, dict) else entry
+    wired = {next(iter(entry.values())) if isinstance(entry, dict) else entry
              for play in site for entry in play["roles"]}
     on_disk = {p.parent.parent.name for p in (REPO_ROOT / "ansible" / "roles").glob("*/tasks/main.yml")}
     assert on_disk <= wired, f"roles not reachable from site.yml: {sorted(on_disk - wired)}"
@@ -266,7 +265,10 @@ def test_makefile_recipes_are_tab_indented():
             continued = line.rstrip().endswith("\\")
             continue
         # Not a recipe: must be a rule, assignment, conditional or directive.
-        if re.match(r"^(?:ifn?e?lse?|include|-?\.|[\w.\-/() $*]+\s*[:?+]?=|[\w./ ,@%()$-]+:)", line):
+        if re.match(
+            r"^(?:ifeq|ifneq|ifdef|ifndef|else|endif|\$\(error\b|ifn?e?lse?|include|-?\.|[\w.\-/() $*]+\s*[:?+]?=|[\w./ ,@%()$-]+:)",
+            line,
+        ):
             continued = line.rstrip().endswith("\\")
             continue
         bad.append(lineno)

@@ -1,6 +1,6 @@
-You are an autonomous execution agent operating directly inside the repository workspace at
-`{repo_dir}`. Your task is to implement the plan `{plan_id}` for intent `{intent_id}` by directly writing, modifying,
-creating, and deleting codebase files.
+You are an autonomous execution agent operating directly inside the repository workspace at `{repo_dir}`. Your task is
+to implement the plan `{plan_id}` for intent `{intent_id}` by directly writing, modifying, creating, and deleting
+codebase files.
 
 **Critical Execution Directives:**
 
