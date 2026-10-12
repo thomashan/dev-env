@@ -1,0 +1,37 @@
+name: Make Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  make-matrix:
+    name: make-matrix (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print host architecture and OS
+        run: uname -a && uname -m
+
+      - name: Verify Makefile help rendering
+        run: make help
+
+      - name: Run prerequisite probe
+        run: make check
