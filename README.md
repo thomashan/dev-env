@@ -33,9 +33,8 @@ dotfiles/
   .config/nvim/             init.lua, nvim-pack-lock.json (vim.pack lockfile -- keep committed)
   .config/tmux/tmux.conf    XDG path, needs tmux >= 3.1
   .condarc                  conda behaviour (strict conda-forge, no auto base activation)
-holon-config/               Holon world ruleset, constraints, prompts, metrics
-holon-knowledge/ledger/     append-only intents / plans / executions ledger
-intents/                    draft intents for the Holon flow (gitignored)
+.github/workflows/          CI/CD workflows (make, hygiene, unit, network)
+tests/                      pytest test suite (manifest invariants, templating, network)
 ```
 
 ## Getting started
@@ -152,9 +151,13 @@ Read this before trusting it.
 - GUI casks (`docker-desktop`, browsers) are declared but off by default (`devenv_install_gui_casks`).
 - No `Brewfile` on purpose: `ansible/group_vars/all.yml` is the single package manifest.
 
-## Holon
+## CI/CD Pipeline
 
-`holon-config/` and `holon-knowledge/` predate this work; `ruleset.md` and `constraints.md` now also cover the
-make-plus-Ansible contract, the no-shell-script rule and the multi-OS rule so the planner and executor agents work
-inside these conventions. Draft intents go in `intents/` (gitignored); the permanent record is
-`holon-knowledge/ledger/`.
+Continuous integration is orchestrated via GitHub Actions workflows in `.github/workflows/`:
+
+- **Make Check (`make.yml`)**: Multi-OS matrix (`ubuntu-latest`, `macos-latest`) testing `make help` and `make check`.
+- **Code Hygiene & Lint (`test-hygiene.yml`)**: Verifies lockfile currency (`uv lock --check`), Ruff linting
+  (`uv run ruff check .`), Prettier markdown formatting, and Ansible playbook linting (`ansible-lint`).
+- **Unit Tests (`test-unit.yml`)**: Multi-OS unit test execution running `uv run --extra test pytest -m "not network"`.
+- **Network Upstream Asset Tests (`test-network.yml`)**: Scheduled and manual validation confirming upstream download
+  URLs and installer filenames remain reachable (`DEVENV_NETWORK_TESTS=1`).

@@ -52,7 +52,7 @@
 
 # The package name is derived from the checkout's pyproject.toml rather than
 # hardcoded, so this task cannot drift from upstream.
-- name: Install the holon CLI from a local checkout
+- name: Install additional CLI tools from a local checkout
   ansible.builtin.command:
     cmd: >-
       {{ devenv_home }}/.local/bin/uv tool install --editable

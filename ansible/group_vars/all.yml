@@ -71,7 +71,7 @@ devenv_remove_unmanaged: false     # opt-in: purge packages in devenv_packages_r
 devenv_backup_dotfiles: true
 
 # --- language runtime pins --------------------------------------------------
-devenv_python_version: "3.13"          # matches holon-config/world/ruleset.md
+devenv_python_version: "3.13"          # pinned Python version
 devenv_conda_env_python: "3.13"
 # Where Neovim comes from: 'package' (brew, current) or 'github' (release
 # tarball, needed on Debian/Ubuntu stable where the packaged build predates
@@ -119,8 +119,8 @@ devenv_packages_remove:
 devenv_uv_tools:
   - ruff
   - pre-commit
-# Local checkout of the holon CLI, e.g. "{{ devenv_home }}/git/holon-agentic-coder-ref".
-# Empty string means "skip" (it is already installed on this host as a uv tool).
+# Local checkout of additional CLI tooling repository.
+# Empty string means "skip".
 devenv_holon_source: ""
 devenv_holon_subdir: apps/sandbox-executor
 
