@@ -1,0 +1,171 @@
+---
+# Interpreter for the managed host (always localhost). `ansible_playbook_python`
+# is Ansible's documented way to pin the target interpreter to the controller's
+# own, so control node and host can never drift onto conda's python. It is
+# space-safe, which matters because `uv tool dir` sits under
+# ~/Library/Application Support on macOS -- a symlinked interpreter there loses
+# venv detection, so we do not try to build one.
+ansible_python_interpreter: "{{ ansible_playbook_python | default('/usr/bin/env python3') }}"
+
+# Home directory, resolved from gathered facts. Used instead of the deprecated
+# `ansible_env.HOME` shorthand (ansible-core 2.21 deprecates ansible_-prefixed
+# fact references).
+devenv_home: "{{ ansible_facts.env.HOME }}"
+
+# ============================================================================
+# Single declarative manifest for the whole environment.
+# Packages are listed by LOGICAL name; per-package-manager alias files in
+# group_vars/pkg_*.yml translate them to real package names. Adding a package
+# means adding one line here (plus aliases if the name differs).
+# ============================================================================
+
+# --- platform support ---
+# Which package backend serves which OS. The bootstrap role reads this instead
+# of a hardcoded `if Darwin then brew`, so the tests can prove every supported
+# OS has a backend and every backend has an alias table.
+devenv_backend_for_system:
+  Darwin: brew
+  Linux: apt
+
+# Upstream installer/release asset names, spelled exactly as the publishers spell
+# them (verified against the GitHub release APIs on 2026-10-10). These differ per
+# OS in ways that break naive composition: Miniforge calls macOS "MacOSX" and
+# reports ARM as "arm64", while on Linux the same hardware is "aarch64".
+devenv_miniforge_asset_os:
+  Darwin: MacOSX
+  Linux: Linux
+devenv_miniforge_asset_arch:
+  Darwin:
+    arm64: arm64
+    aarch64: arm64
+    x86_64: x86_64
+  Linux:
+    arm64: aarch64
+    aarch64: aarch64
+    x86_64: x86_64
+    amd64: x86_64
+
+devenv_neovim_asset_os:
+  Darwin: macos
+  Linux: linux
+devenv_neovim_asset_arch:
+  Darwin:
+    arm64: arm64
+    aarch64: arm64
+    x86_64: x86_64
+  Linux:
+    arm64: arm64
+    aarch64: arm64
+    x86_64: x86_64
+# Only these package backends have a validated alias table. Anything else
+# aborts in the bootstrap role instead of installing guessed package names.
+devenv_supported_backends:
+  - brew
+  - apt
+
+# --- feature flags ----------------------------------------------------------
+devenv_install_homebrew: true      # Darwin only; needs interactive sudo
+devenv_install_gui_casks: false    # browsers, Docker Desktop, IDEs, ...
+devenv_set_login_shell: false      # opt-in: chsh to fish (make login-shell)
+devenv_remove_unmanaged: false     # opt-in: purge packages in devenv_packages_remove
+devenv_backup_dotfiles: true
+
+# --- language runtime pins --------------------------------------------------
+devenv_python_version: "3.13"          # matches holon-config/world/ruleset.md
+devenv_conda_env_python: "3.13"
+# Where Neovim comes from: 'package' (brew, current) or 'github' (release
+# tarball, needed on Debian/Ubuntu stable where the packaged build predates
+# vim.pack). Set per OS in ansible/vars/os_*.yml.
+devenv_neovim_source: package
+# Node pin is NOT here on purpose: it lives in
+# dotfiles/.config/fish/conf.d/00-devenv.fish (devenv_node_default_version)
+# so the shell and Ansible can never disagree. The node role reads it from there.
+
+# --- core CLI packages (logical names, all supported OSes) ------------------
+devenv_packages_core:
+  - git
+  - curl
+  - unzip
+  - rsync
+  - openssh
+  - neovim
+  - tmux
+  - fish
+  - ripgrep
+  - fd
+  - fzf
+  - jq
+  - htop
+  - tree
+  - watch
+  - ncdu
+  - delta
+  - gh
+  - aria2
+  - autossh
+  - iperf3
+
+# --- host-level extras installed through the system package manager ---------
+devenv_packages_extra: []
+
+# --- packages that must NOT be present (nvm owns node, miniforge owns conda)
+# Applied only when devenv_remove_unmanaged: true. These are the duplicates
+# found on the initial macOS host: three different node binaries.
+devenv_packages_remove:
+  - nvm      # brew nvm (bash-oriented) conflicts with nvm.fish, owns ~/.nvm
+  - node     # brew node v26 shadowed nvm-managed node
+
+# --- uv-managed python tools (identical on every OS) ------------------------
+devenv_uv_tools:
+  - ruff
+  - pre-commit
+# Local checkout of the holon CLI, e.g. "{{ devenv_home }}/git/holon-agentic-coder-ref".
+# Empty string means "skip" (it is already installed on this host as a uv tool).
+devenv_holon_source: ""
+devenv_holon_subdir: apps/sandbox-executor
+
+# --- conda ------------------------------------------------------------------
+devenv_conda_dir: "{{ devenv_home }}/miniforge3"
+# Upstream tag of the Miniforge installer. 'latest' tracks conda-forge/miniforge;
+# pin a release such as "25.1.0-1" for reproducible rebuilds.
+devenv_conda_release: latest
+devenv_conda_envs:
+  - name: dev
+    python: "{{ devenv_conda_env_python }}"
+
+# --- dotfile link manifest (explicit = reviewable in a PR diff) -------------
+# Each item: src is repo-relative, dest is absolute. Nothing is linked that is
+# not listed here; ~/.config is never linked wholesale, and src must be a FILE
+# (the dotfiles role rejects directory entries so third-party files sharing a
+# directory can never be displaced).
+devenv_links:
+  - src: dotfiles/.condarc
+    dest: "{{ devenv_home }}/.condarc"
+  - src: dotfiles/.config/fish/config.fish
+    dest: "{{ devenv_home }}/.config/fish/config.fish"
+  - src: dotfiles/.config/fish/fish_plugins
+    dest: "{{ devenv_home }}/.config/fish/fish_plugins"
+  # conf.d is linked file-by-file on purpose: fisher installs plugin payloads
+  # (nvm.fish, sdk.fish) into the same directory, and Ansible refuses to turn a
+  # non-empty directory into a symlink -- and would have hidden those payloads.
+  - src: dotfiles/.config/fish/conf.d/00-devenv.fish
+    dest: "{{ devenv_home }}/.config/fish/conf.d/00-devenv.fish"
+  - src: dotfiles/.config/nvim/init.lua
+    dest: "{{ devenv_home }}/.config/nvim/init.lua"
+  - src: dotfiles/.config/nvim/nvim-pack-lock.json
+    dest: "{{ devenv_home }}/.config/nvim/nvim-pack-lock.json"
+  - src: dotfiles/.config/tmux/tmux.conf
+    dest: "{{ devenv_home }}/.config/tmux/tmux.conf"
+
+# Runtime state that must never enter the repo (generated, machine-local).
+devenv_dotfile_ignores:
+  - "{{ devenv_home }}/.config/fish/fish_variables"
+  - "{{ devenv_home }}/.config/fish/local"
+  - "{{ devenv_home }}/.config/nvim/nvim-pack-lock.json.bak"
+
+# Candidate shell entries written to /etc/shells when devenv_set_login_shell is on.
+devenv_fish_shell_paths:
+  - /opt/homebrew/bin/fish   # macOS, Apple Silicon
+  - /usr/local/bin/fish      # macOS, Intel
+  - /usr/bin/fish            # Debian / Ubuntu
+  - /bin/fish

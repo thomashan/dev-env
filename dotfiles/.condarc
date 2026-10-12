@@ -1,0 +1,12 @@
+# Conda behaviour, repo-managed (symlinked to ~/.condarc).
+# Deliberately conservative for an agent-driven environment:
+#   * auto_activate_base off  -> a shell starts clean; you opt in with `conda activate`
+#   * strict channel priority -> reproducible solves from conda-forge
+#   * changeps1 off           -> the prompt stays intact for the starship/plain prompt
+channels:
+  - conda-forge
+channel_priority: strict
+auto_activate_base: false
+changeps1: false
+always_yes: false
+notify_outdated_conda: false

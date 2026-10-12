@@ -1,0 +1,68 @@
+---
+# After the dotfiles role has linked the config, prove it parses, then
+# optionally make fish the login shell (opt-in; chsh can prompt for a password).
+
+- name: Collect linked fish files
+  ansible.builtin.find:
+    paths:
+      - "{{ devenv_home }}/.config/fish"
+      - "{{ devenv_home }}/.config/fish/conf.d"
+    patterns: "*.fish"
+    file_type: file
+    recurse: false
+  register: devenv_fish_files
+
+- name: Syntax-check every fish file now on disk
+  ansible.builtin.command:
+    cmd: fish -n "{{ item.path }}"
+  loop: "{{ devenv_fish_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  changed_when: false
+
+- name: Report the fish version in use
+  ansible.builtin.command:
+    cmd: fish --version
+  register: devenv_fish_version
+  changed_when: false
+
+- name: Show fish version
+  ansible.builtin.debug:
+    msg: "{{ devenv_fish_version.stdout }}"
+
+- name: Register fish in /etc/shells (required before chsh on both OSes)
+  ansible.builtin.lineinfile:
+    path: /etc/shells
+    line: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ devenv_fish_shell_paths }}"
+  when: devenv_set_login_shell | bool
+
+- name: Locate the fish binary among the known install paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ devenv_fish_shell_paths }}"
+  register: devenv_fish_stat
+  when: devenv_set_login_shell | bool
+
+- name: Record the fish binary
+  ansible.builtin.set_fact:
+    devenv_fish_bin: "{{ (devenv_fish_stat.results | default([]) | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first }}"
+  when: devenv_set_login_shell | bool
+
+- name: Require a fish binary before changing the login shell
+  ansible.builtin.assert:
+    that: devenv_fish_bin | default('') | length > 0
+    fail_msg: "devenv_set_login_shell is on but no fish binary exists in devenv_fish_shell_paths"
+    quiet: true
+  when: devenv_set_login_shell | bool
+
+- name: Set fish as the login shell
+  ansible.builtin.command:
+    cmd: chsh -s {{ devenv_fish_bin }}
+  register: devenv_chsh
+  when:
+    - devenv_set_login_shell | bool
+    - (ansible_facts.env.SHELL | default('')) != devenv_fish_bin
+  changed_when: true

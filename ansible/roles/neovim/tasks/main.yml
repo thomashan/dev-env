@@ -1,0 +1,78 @@
+---
+# Neovim comes from brew on macOS, from the upstream GitHub release on Debian /
+# Ubuntu (the packaged build there predates vim.pack, which this config uses).
+
+- name: Resolve the latest Neovim release (github source only)
+  community.general.github_release:
+    repo: neovim/neovim
+    user: neovim
+  register: devenv_nvim_release
+  when: devenv_neovim_source == 'github'
+
+- name: Compute the release asset name
+  ansible.builtin.set_fact:
+    devenv_nvim_asset: >-
+      nvim-{{ devenv_neovim_asset_os[devenv_system] }}-{{ devenv_neovim_asset_arch[devenv_system][devenv_arch] }}.tar.gz
+  when: devenv_neovim_source == 'github'
+
+- name: Download the Neovim release archive
+  ansible.builtin.get_url:
+    url: "{{ devenv_nvim_release.assets[devenv_nvim_asset] }}"
+    dest: "{{ devenv_home }}/.cache/dev-env/{{ devenv_nvim_asset }}"
+    mode: "0644"
+  when: devenv_neovim_source == 'github'
+
+- name: Unpack Neovim under a user-owned prefix
+  ansible.builtin.unarchive:
+    src: "{{ devenv_home }}/.cache/dev-env/{{ devenv_nvim_asset }}"
+    dest: "{{ devenv_home }}/.local/opt"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: "{{ devenv_home }}/.local/opt/bin/nvim"
+  when: devenv_neovim_source == 'github'
+
+- name: Put the release build first on the tool path
+  ansible.builtin.file:
+    src: "{{ devenv_home }}/.local/opt/bin/nvim"
+    dest: "{{ devenv_home }}/.local/bin/nvim"
+    state: link
+    force: true
+  when: devenv_neovim_source == 'github'
+
+- name: Read the installed Neovim version
+  ansible.builtin.command:
+    cmd: nvim --version
+  register: devenv_nvim_version
+  changed_when: false
+
+- name: Assert Neovim is new enough for vim.pack and nvim-pack-lock.json
+  ansible.builtin.assert:
+    that:
+      - devenv_nvim_version.stdout_lines[0] is match('NVIM v')
+      - (devenv_nvim_version.stdout_lines[0].regex_replace('^NVIM v(\\d+)\\.(\\d+).*$', '\\1') | int) > 0
+      - (devenv_nvim_version.stdout_lines[0].regex_replace('^NVIM v\\d+\\.(\\d+).*$', '\\1') | int) >= 12
+    fail_msg: >-
+      {{ devenv_nvim_version.stdout_lines[0] }} is too old; dotfiles/.config/nvim/init.lua
+      uses vim.pack() + nvim-pack-lock.json (0.12+). Set devenv_neovim_source: github for
+      this platform.
+    quiet: true
+
+- name: Sync plugins declared in init.lua at their locked revisions
+  ansible.builtin.command:
+    cmd: nvim --headless -c 'sleep 5000m' -c 'qa'
+  register: devenv_nvim_sync
+  changed_when: true
+  tags: [nvim-sync]
+
+- name: Count loaded packages
+  ansible.builtin.command:
+    cmd: >-
+      nvim --headless -c 'lua local n=#vim.pack.get() io.write("packages=" .. n)' -c 'qa'
+  register: devenv_nvim_pkgs
+  changed_when: false
+  tags: [nvim-sync]
+
+- name: Report plugin count
+  ansible.builtin.debug:
+    msg: "{{ devenv_nvim_pkgs.stdout | default('not checked this run') }}"
+  when: devenv_nvim_pkgs.stdout is defined

@@ -1,0 +1,32 @@
+---
+# The abstraction you asked for: one logical list in group_vars/all.yml,
+# two real backends. Nothing here knows about macOS vs Linux package names.
+
+- name: Install packages via Homebrew
+  community.general.homebrew:
+    name: "{{ devenv_packages_concrete }}"
+    state: present
+    path: "{{ devenv_brew_bin | default(omit) }}"
+    update_homebrew: false
+  when: devenv_pkg_backend == 'brew'
+
+- name: Install packages via apt
+  ansible.builtin.apt:
+    name: "{{ devenv_packages_concrete }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+  become: "{{ devenv_become_package_install | bool }}"
+  when: devenv_pkg_backend == 'apt'
+
+- name: Remove packages that duplicate a managed runtime
+  ansible.builtin.command:
+    cmd: >-
+      {{ 'brew uninstall ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' '))
+         if devenv_pkg_backend == 'brew'
+         else 'apt-get remove -y ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' ')) }}
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_remove_unmanaged | bool
+    - devenv_packages_remove | length > 0

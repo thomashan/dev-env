@@ -1,0 +1,28 @@
+---
+# Homebrew alias table (macOS). Every logical name in
+# ansible/group_vars/all.yml must appear here; the bootstrap role asserts it
+# rather than letting a wrong name reach `brew install`.
+#
+# Host-verified: brew formula names below were checked against Homebrew 7.0.9
+# on this machine with `brew info --json=v2 <formula>`.
+devenv_pkg_aliases:
+  git: git
+  curl: curl
+  rsync: rsync
+  openssh: openssh
+  neovim: neovim
+  tmux: tmux
+  fish: fish
+  ripgrep: ripgrep
+  fd: fd
+  fzf: fzf
+  jq: jq
+  htop: htop
+  tree: tree
+  watch: watch
+  ncdu: ncdu
+  delta: delta
+  gh: gh
+  aria2: aria2
+  autossh: autossh
+  iperf3: iperf3

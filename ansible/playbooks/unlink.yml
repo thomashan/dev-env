@@ -1,0 +1,43 @@
+---
+# Reversibility: remove ONLY the symlinks listed in devenv_links. Real files
+# are never deleted, and backups created by the dotfiles role are left alone.
+- name: Unlink managed dotfiles
+  hosts: control
+  gather_facts: true
+  vars:
+    devenv_repo_root: "{{ (playbook_dir ~ '/../..') | realpath }}"
+  tasks:
+    - name: Load the manifest
+      ansible.builtin.include_vars:
+        file: "{{ devenv_repo_root }}/ansible/group_vars/all.yml"
+
+    - name: Find which managed paths are symlinks
+      ansible.builtin.stat:
+        path: "{{ item.dest }}"
+      register: devenv_unlink_stat
+      loop: "{{ devenv_links }}"
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Refuse to remove anything that is not our symlink
+      ansible.builtin.assert:
+        that:
+          - (item.stat.lnk_source | default('')) startswith devenv_repo_root
+        fail_msg: "{{ item.item.dest }} exists but is not a symlink into {{ devenv_repo_root }}; refusing to delete."
+        quiet: true
+      loop: "{{ devenv_unlink_stat.results }}"
+      loop_control:
+        label: "{{ item.item.dest }}"
+      when: item.stat.exists | default(false)
+
+    - name: Remove the symlinks
+      ansible.builtin.file:
+        path: "{{ item.item.dest }}"
+        state: absent
+      loop: "{{ devenv_unlink_stat.results }}"
+      loop_control:
+        label: "{{ item.item.dest }}"
+      when:
+        - item.stat.exists | default(false)
+        - item.stat.islnk | default(false)
+        - (item.stat.lnk_source | default('')) startswith devenv_repo_root

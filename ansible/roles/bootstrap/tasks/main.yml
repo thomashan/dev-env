@@ -1,0 +1,56 @@
+---
+# Runs first: classifies the host, loads the OS/package-manager variable table
+# and refuses to continue on unsupported platforms rather than half-installing.
+
+- name: Classify host platform
+  ansible.builtin.set_fact:
+    devenv_repo_root: "{{ (playbook_dir ~ '/..') | realpath }}"
+    devenv_system: "{{ ansible_facts.system }}"
+    devenv_arch: "{{ ansible_facts.architecture }}"
+    devenv_pkg_backend: "{{ devenv_backend_for_system.get(ansible_facts.system, 'unsupported') }}"
+
+- name: Load OS-specific variables
+  ansible.builtin.include_vars:
+    file: "{{ devenv_repo_root }}/ansible/vars/os_{{ devenv_system }}.yml"
+
+- name: Fail early on an unsupported package backend
+  ansible.builtin.fail:
+    msg: >-
+      Package backend '{{ devenv_pkg_backend }}' has no variable table.
+      Supported: brew (macOS), apt (Debian/Ubuntu).
+      To add another distro, create ansible/vars/pkg_<mgr>.yml mapping every
+      logical name in ansible/group_vars/all.yml, then list it in
+      devenv_supported_backends.
+  when: devenv_pkg_backend not in devenv_supported_backends
+
+- name: Load package-manager alias table
+  ansible.builtin.include_vars:
+    file: "{{ devenv_repo_root }}/ansible/vars/pkg_{{ devenv_pkg_backend }}.yml"
+
+- name: Build the wanted list (logical names minus OS-provided ones)
+  ansible.builtin.set_fact:
+    devenv_packages_wanted: >-
+      {{ (devenv_packages_core + devenv_packages_extra)
+         | difference(devenv_pkg_skip | default([])) | unique | sort }}
+
+- name: Fail when a logical package has no alias for this package manager
+  ansible.builtin.assert:
+    that:
+      - devenv_pkg_aliases is mapping
+      - (devenv_packages_wanted | difference(devenv_pkg_aliases.keys() | list)) | length == 0
+    fail_msg: >-
+      ansible/vars/pkg_{{ devenv_pkg_backend }}.yml is missing aliases for:
+      {{ devenv_packages_wanted | difference(devenv_pkg_aliases.keys() | list) | join(', ') }}
+    quiet: true
+
+- name: Resolve logical names to concrete package names
+  ansible.builtin.set_fact:
+    devenv_packages_concrete: "{{ devenv_packages_wanted | map('extract', devenv_pkg_aliases) | unique | sort }}"
+
+- name: Show resolved plan
+  ansible.builtin.debug:
+    msg:
+      - "platform   : {{ devenv_system }}/{{ devenv_arch }}  backend: {{ devenv_pkg_backend }}"
+      - "packages   : {{ devenv_packages_concrete | length }} concrete ({{ devenv_pkg_skip | default([]) | join(',') }} skipped as OS-provided)"
+      - "python pin : {{ devenv_python_version }}   conda dir: {{ devenv_conda_dir }}"
+      - "repo root  : {{ devenv_repo_root }}"

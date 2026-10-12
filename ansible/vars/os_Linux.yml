@@ -1,0 +1,9 @@
+---
+# Linux. ansible_facts.pkg_mgr comes from setup facts (apt / dnf / pacman).
+devenv_become_package_install: true
+devenv_pkg_skip: []
+devenv_casks: []
+devenv_brew_taps: []
+
+# Neovim source for this platform (see comment in group_vars/all.yml)
+devenv_neovim_source: github

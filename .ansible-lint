@@ -1,0 +1,20 @@
+---
+# Measured, not aspirational: these skips are documented deviations.
+profile: basic
+exclude_paths:
+  - .cache
+  - dotfiles
+  - holon-knowledge
+skip_list:
+  # Roles in this repo share one `devenv_` namespace on purpose: bootstrap resolves
+  # platform facts and the alias table that every later role consumes. Galaxy's
+  # "<rolename>_" prefix rule would force a private copy per role and break that.
+  - var-naming[no-role-prefix]
+  # Roles live in ansible/roles/<name>; the galaxy role-name convention adds nothing here.
+  - role-name
+  # README lines explaining flags are long on purpose.
+  - yaml[line-length]
+  # Symlinks carry no mode of their own; the roles set modes on real dirs/files.
+  - risky-file-permissions
+  # Bootstrap installs upstream installers (Homebrew, uv, Miniforge) by design.
+  - no-changed-when

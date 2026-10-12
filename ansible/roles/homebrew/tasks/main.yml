@@ -1,0 +1,79 @@
+---
+# macOS bootstrap: install Homebrew itself if absent, then taps and casks.
+# Formula installation lives in the packages role so both backends share one path.
+
+- name: Locate Homebrew
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: devenv_brew_stat
+  loop:
+    - /opt/homebrew/bin/brew     # Apple Silicon
+    - /usr/local/bin/brew        # Intel
+    - "{{ devenv_home }}/.linuxbrew/bin/brew"   # Linuxbrew (uncommon)
+
+- name: Record Homebrew location
+  ansible.builtin.set_fact:
+    devenv_brew_bin: "{{ (devenv_brew_stat.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first }}"
+
+- name: Report missing Homebrew
+  ansible.builtin.debug:
+    msg: "Homebrew not found; devenv_install_homebrew={{ devenv_install_homebrew }}"
+  when: devenv_brew_bin | length == 0
+
+- name: Download the Homebrew install script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+    dest: "{{ devenv_home }}/.cache/dev-env/homebrew-install.sh"
+    mode: "0755"
+  when:
+    - devenv_brew_bin | length == 0
+    - devenv_install_homebrew | bool
+  become: false
+
+- name: Install Homebrew (interactive sudo; NONINTERACTIVE keeps it unattended)
+  ansible.builtin.command:
+    cmd: /bin/bash "{{ devenv_home }}/.cache/dev-env/homebrew-install.sh"
+    creates: "{{ devenv_home }}/.linuxbrew/bin/brew"
+  environment:
+    NONINTERACTIVE: "1"
+  when:
+    - devenv_brew_bin | length == 0
+    - devenv_install_homebrew | bool
+
+- name: Re-locate Homebrew after install
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: devenv_brew_stat2
+  loop:
+    - /opt/homebrew/bin/brew
+    - /usr/local/bin/brew
+    - "{{ devenv_home }}/.linuxbrew/bin/brew"
+  when: devenv_brew_bin | length == 0
+
+- name: Finalise Homebrew location
+  ansible.builtin.set_fact:
+    devenv_brew_bin: "{{ (devenv_brew_stat2.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first }}"
+  when: devenv_brew_bin | length == 0
+
+- name: Require Homebrew for the brew backend
+  ansible.builtin.assert:
+    that: devenv_brew_bin | length > 0
+    fail_msg: "brew backend selected but no brew binary found. Install Homebrew or set devenv_install_homebrew: true."
+    quiet: true
+
+- name: Configure Homebrew taps
+  community.general.homebrew_tap:
+    name: "{{ item }}"
+    path: "{{ devenv_brew_bin }}"
+  loop: "{{ devenv_brew_taps }}"
+  when: devenv_brew_taps | length > 0
+
+- name: Install GUI casks
+  community.general.homebrew_cask:
+    name: "{{ item }}"
+    state: present
+    path: "{{ devenv_brew_bin }}"
+  loop: "{{ devenv_casks }}"
+  when:
+    - devenv_install_gui_casks | bool
+    - devenv_casks | length > 0

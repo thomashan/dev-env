@@ -1,0 +1,26 @@
+---
+# Debian / Ubuntu. WARNING: names follow distribution conventions but this
+# table has not been exercised on a live host yet -- run `make probe-packages`
+# (apt install --dry-run semantics via --check) before trusting it.
+devenv_pkg_aliases:
+  git: git
+  curl: curl
+  unzip: unzip
+  rsync: rsync
+  openssh: openssh-client
+  neovim: neovim           # Debian stable ships an old Neovim; use devenv_neovim_source: github for 0.12+ (vim.pack)
+  tmux: tmux
+  fish: fish
+  ripgrep: ripgrep
+  fd: fd-find
+  fzf: fzf
+  jq: jq
+  htop: htop
+  tree: tree
+  watch: procps
+  ncdu: ncdu
+  delta: git-delta
+  gh: gh                   # Debian requires the GitHub CLI apt repo; Ubuntu has it in universe
+  aria2: aria2
+  autossh: autossh
+  iperf3: iperf3
