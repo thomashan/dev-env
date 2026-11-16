@@ -26,7 +26,7 @@
 - name: Install additional CLI tools from a local checkout
   ansible.builtin.command:
     cmd: >-
-      "{{ devenv_conda_dir }}/bin/uv" pip install --no-deps -e
+      "{{ devenv_conda_dir }}/bin/uv" pip install --python "{{ devenv_conda_dir }}/bin/python" --no-deps -e
       {{ devenv_holon_source }}/{{ devenv_holon_subdir }}
   when: devenv_holon_source | length > 0
   register: devenv_holon

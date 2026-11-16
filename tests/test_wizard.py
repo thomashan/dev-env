@@ -132,6 +132,21 @@ def test_backup_file(tmp_path):
     assert "20261116120000" in str(backed_up)
 
 
+def test_backup_file_broken_symlink(tmp_path):
+    home_dir = tmp_path / "home"
+    target = home_dir / ".bashrc"
+    target.parent.mkdir(parents=True)
+    # Create a broken symlink pointing to non-existent file
+    target.symlink_to(home_dir / "nonexistent_target")
+    assert target.is_symlink()
+    assert not target.exists()
+
+    backed_up = backup_file(target, home_dir, timestamp="20261116120000")
+    assert backed_up.is_symlink()
+    assert not backed_up.exists()
+    assert "20261116120000" in str(backed_up)
+
+
 def test_extract_local_override(tmp_path):
     home_dir = tmp_path / "home"
     target = home_dir / ".bashrc"
@@ -175,8 +190,31 @@ def test_dump_and_load_yaml_fallback():
 
     parsed = load_yaml_fallback(rendered)
     assert parsed["devenv_pkg_backend"] == "apt"
+    assert parsed["devenv_selected_variants"] == {"nvim": "kickstart"}
     assert parsed["devenv_set_login_shell"] is False
+    assert parsed["devenv_skip_links"] == []
     assert "bash" in parsed["devenv_stow_packages"]
+
+
+def test_load_yaml_fallback_without_pyyaml(monkeypatch):
+    import scripts.devenv_wizard as wizard
+
+    monkeypatch.setattr(wizard, "yaml", None)
+    data = {
+        "devenv_pkg_backend": "apt",
+        "devenv_selected_variants": {"nvim": "minimal"},
+        "devenv_stow_packages": ["bash", "nvim-minimal"],
+        "devenv_skip_links": [],
+        "devenv_set_login_shell": False,
+        "devenv_python_version": "3.13",
+    }
+    rendered = dump_yaml_fallback(data)
+    parsed = load_yaml_fallback(rendered)
+    assert parsed["devenv_pkg_backend"] == "apt"
+    assert parsed["devenv_selected_variants"] == {"nvim": "minimal"}
+    assert parsed["devenv_stow_packages"] == ["bash", "nvim-minimal"]
+    assert parsed["devenv_set_login_shell"] is False
+    assert parsed["devenv_skip_links"] == []
 
 
 def test_run_wizard_non_interactive(tmp_path):

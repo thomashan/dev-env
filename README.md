@@ -98,9 +98,9 @@ Worktree directory layout:
 
 ```bash
 make check        # Read-only prerequisite probe (never modifies system)
-make configure    # Interactive wizard: select variants & resolve conflicts
 make bootstrap    # Provision Conda, Python 3.13, Ansible, and collections
-make install      # Full pipeline: check -> configure -> bootstrap -> converge
+make configure    # Interactive wizard: select variants & resolve conflicts
+make install      # Full pipeline: check -> bootstrap -> configure -> converge
 ```
 
 ### Day-to-Day Operations

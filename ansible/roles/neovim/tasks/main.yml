@@ -56,7 +56,7 @@
       uses vim.pack() + nvim-pack-lock.json (0.12+). Set devenv_neovim_source: github for
       this platform.
     quiet: true
-  when: devenv_active_nvim_variant | default('kickstart') in ['kickstart', 'minimal']
+  when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'
 
 - name: Sync plugins declared in init.lua at their locked revisions
   ansible.builtin.command:
@@ -64,7 +64,7 @@
   register: devenv_nvim_sync
   changed_when: true
   tags: [nvim-sync]
-  when: devenv_active_nvim_variant | default('kickstart') in ['kickstart', 'minimal']
+  when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'
 
 - name: Count loaded packages
   ansible.builtin.command:
@@ -73,7 +73,7 @@
   register: devenv_nvim_pkgs
   changed_when: false
   tags: [nvim-sync]
-  when: devenv_active_nvim_variant | default('kickstart') in ['kickstart', 'minimal']
+  when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'
 
 - name: Report plugin count
   ansible.builtin.debug:

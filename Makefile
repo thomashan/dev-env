@@ -171,10 +171,10 @@ configure:
 	fi
 
 install: check
+	@$(MAKE) bootstrap
 	@if [ -t 0 ] && [ ! "$$CI" = "true" ] && [ ! -f "$$HOME/.config/dev-env/choices.yml" ]; then \
 		$(MAKE) configure || exit 1; \
 	fi
-	@$(MAKE) bootstrap
 	@$(MAKE) converge
 
 converge:

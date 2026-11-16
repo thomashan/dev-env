@@ -71,6 +71,23 @@ def dump_yaml_fallback(data: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _parse_yaml_scalar(val: str) -> Any:
+    val = val.strip()
+    if (val.startswith('"') and val.endswith('"') and len(val) >= 2) or (
+        val.startswith("'") and val.endswith("'") and len(val) >= 2
+    ):
+        val = val[1:-1]
+    if val == "true":
+        return True
+    if val == "false":
+        return False
+    if val == "[]":
+        return []
+    if val == "{}":
+        return {}
+    return val
+
+
 def load_yaml_fallback(text: str) -> dict[str, Any]:
     """Minimal YAML loader fallback for choices.yml."""
     if yaml is not None:
@@ -79,31 +96,34 @@ def load_yaml_fallback(text: str) -> dict[str, Any]:
 
     result: dict[str, Any] = {}
     current_key: str | None = None
-    for line in text.splitlines():
-        line = line.strip()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
         if not line or line.startswith("#") or line == "---":
             continue
-        if ":" in line:
+        indent = len(raw_line) - len(raw_line.lstrip())
+        if indent == 0 and ":" in line:
             key, val = line.split(":", 1)
             key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if val == "true":
-                result[key] = True
-            elif val == "false":
-                result[key] = False
-            elif val == "[]":
-                result[key] = []
-            elif val == "{}":
-                result[key] = {}
-            elif val:
-                result[key] = val
-            else:
-                result[key] = []
+            val = val.strip()
+            if not val:
                 current_key = key
-        elif line.startswith("- ") and current_key:
-            item = line[2:].strip().strip('"').strip("'")
-            if isinstance(result.get(current_key), list):
-                result[current_key].append(item)
+                result[key] = {} if key == "devenv_selected_variants" else []
+            else:
+                result[key] = _parse_yaml_scalar(val)
+                current_key = None
+        elif current_key is not None and indent > 0:
+            if line.startswith("- "):
+                item = line[2:].strip()
+                if not isinstance(result.get(current_key), list):
+                    result[current_key] = []
+                result[current_key].append(_parse_yaml_scalar(item))
+            elif ":" in line:
+                sub_k, sub_v = line.split(":", 1)
+                sub_k = sub_k.strip()
+                sub_v = sub_v.strip()
+                if not isinstance(result.get(current_key), dict):
+                    result[current_key] = {}
+                result[current_key][sub_k] = _parse_yaml_scalar(sub_v)
     return result
 
 
@@ -238,7 +258,7 @@ def backup_file(target_path: Path, home_dir: Path, timestamp: str | None = None)
     backup_dir.mkdir(parents=True, exist_ok=True)
     safe_name = str(target_path).lstrip("/").replace("/", "__")
     backup_target = backup_dir / safe_name
-    shutil.copy2(target_path, backup_target)
+    shutil.copy2(target_path, backup_target, follow_symlinks=False)
     return backup_target
 
 
