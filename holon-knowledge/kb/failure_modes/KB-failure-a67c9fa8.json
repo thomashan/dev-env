@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-a67c9fa8",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-16T03:39:15.370702+00:00",
+  "updated_ts": "2026-11-16T03:39:15.370702+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1794799161-0b4b2fdc",
+      "ACT-REV-1794799160-0af60042"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794797329-wizard/P-1794797347-a9fe7160-antigravity-agent-gemini-3.8-flash-medium/E-1794797638-0efc6fff-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 evaluation for I-1794797329-wizard/P-1794797347-a9fe7160-antigravity-agent-gemini-3.8-flash-medium/E-1794797638-0efc6fff-antigravity-agent-gemini-3.8-flash-medium/_",
+    "symptoms": [
+      "Findings detected: ['FIND-R1-001-01', 'FIND-R1-001-02', 'FIND-R1-001-03', 'FIND-R1-001-04', 'FIND-R3-001-01', 'FIND-R3-001-02', 'FIND-R3-001-03', 'FIND-R3-001-04']"
+    ]
+  }
+}
