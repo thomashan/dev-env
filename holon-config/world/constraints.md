@@ -49,8 +49,8 @@ Because this repository owns the developer environment, execution runs must resp
 - **Host Wizard Configuration:** User choices and conflict resolution decisions are gathered via `make configure`
   (`scripts/devenv_wizard.py`) and persisted to `~/.config/dev-env/choices.yml`. Ansible reads this file cleanly.
 - **Converge Through the Manifest:** Add a package by editing `ansible/group_vars/all.yml` plus the alias tables --
-  never by running `brew install` / `apt-get install` inside an execution step. Undeclared installs are invisible to
-  every other machine.
+  never by running `brew install` / `apt install` inside an execution step. Undeclared installs are invisible to every
+  other machine.
 - **Never Write Outside the Repo Except Through Ansible:** Direct writes to `$HOME` (for example editing
   `~/.config/nvim/init.lua`) are prohibited; edit `dotfiles/` and let the `dotfiles` role link it. `make dotfiles` is
   the only sanctioned path to `$HOME`.
