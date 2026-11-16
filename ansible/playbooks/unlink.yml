@@ -11,6 +11,16 @@
       ansible.builtin.include_vars:
         file: "{{ devenv_repo_root }}/ansible/group_vars/all.yml"
 
+    - name: Check for user choices
+      ansible.builtin.stat:
+        path: "{{ devenv_home }}/.config/dev-env/choices.yml"
+      register: devenv_choices_stat
+
+    - name: Load user choices if present
+      ansible.builtin.include_vars:
+        file: "{{ devenv_home }}/.config/dev-env/choices.yml"
+      when: devenv_choices_stat.stat.exists
+
     - name: Locate GNU Stow binary
       ansible.builtin.command:
         cmd: which stow
@@ -26,6 +36,13 @@
           GNU Stow was not found on PATH. stow is required for unlinking managed dotfiles.
           Please install stow first.
         quiet: true
+
+    - name: Collect all stow packages to unlink (active and inactive variants)
+      ansible.builtin.set_fact:
+        devenv_all_stow_packages: >-
+          {{ ((devenv_stow_packages | default([])) +
+              (devenv_package_variants.nvim.variants.values() | map(attribute='package') | list))
+             | unique | sort }}
 
     - name: Find which managed paths are symlinks
       ansible.builtin.stat:
@@ -50,12 +67,13 @@
         label: "{{ item.item.dest }}"
       when: item.stat.exists | default(false)
 
-    - name: Invoke stow to delete managed packages
+    - name: Invoke stow to delete all declared variant packages
       ansible.builtin.command:
         cmd: >-
           stow --delete -v
           -d "{{ devenv_repo_root }}/dotfiles"
           -t "{{ devenv_home }}"
-          {{ devenv_stow_packages | join(' ') }}
+          {{ devenv_all_stow_packages | join(' ') }}
       register: devenv_stow_unlink
       changed_when: "'UNLINK:' in devenv_stow_unlink.stderr"
+      failed_when: false

@@ -1,6 +1,6 @@
 ---
-# Runs first: classifies the host, loads the OS/package-manager variable table
-# and refuses to continue on unsupported platforms rather than half-installing.
+# Runs first: classifies the host, loads the OS/package-manager variable table,
+# loads user choices if present, and refuses to continue on unsupported platforms.
 
 - name: Classify host platform
   ansible.builtin.set_fact:
@@ -8,6 +8,52 @@
     devenv_system: "{{ ansible_facts.system }}"
     devenv_arch: "{{ ansible_facts.architecture }}"
     devenv_pkg_backend: "{{ devenv_backend_for_system.get(ansible_facts.system, 'unsupported') }}"
+
+- name: Check if choices.yml exists
+  ansible.builtin.stat:
+    path: "{{ devenv_home }}/.config/dev-env/choices.yml"
+  register: devenv_choices_stat
+
+- name: Load choices.yml if present
+  ansible.builtin.include_vars:
+    file: "{{ devenv_home }}/.config/dev-env/choices.yml"
+  when: devenv_choices_stat.stat.exists
+
+- name: Resolve active variant and inactive packages
+  ansible.builtin.set_fact:
+    devenv_active_nvim_variant: >-
+      {{ devenv_selected_variants.nvim if (devenv_selected_variants is defined and devenv_selected_variants and 'nvim' in devenv_selected_variants) else devenv_package_variants.nvim.default }}
+    devenv_inactive_packages: >-
+      {{ (devenv_package_variants.nvim.variants.values() | map(attribute='package') | list)
+         | difference([devenv_package_variants.nvim.variants[devenv_selected_variants.nvim if (devenv_selected_variants is defined and devenv_selected_variants and 'nvim' in devenv_selected_variants) else devenv_package_variants.nvim.default].package]) }}
+
+- name: Resolve active stow packages
+  ansible.builtin.set_fact:
+    devenv_stow_packages: >-
+      {{ ((devenv_stow_packages | difference(devenv_inactive_packages)) + [devenv_package_variants.nvim.variants[devenv_active_nvim_variant].package]) | unique | sort }}
+
+- name: Update link manifest for minimal nvim variant
+  ansible.builtin.set_fact:
+    devenv_links: >-
+      {{ (devenv_links | rejectattr('src', 'match', '^dotfiles/nvim-kickstart/') | list) +
+         [{'src': 'dotfiles/nvim-minimal/.config/nvim/init.lua', 'dest': devenv_home ~ '/.config/nvim/init.lua'}] }}
+  when: devenv_active_nvim_variant == 'minimal'
+
+- name: Update link manifest for lazyvim nvim variant
+  ansible.builtin.set_fact:
+    devenv_links: >-
+      {{ (devenv_links | rejectattr('src', 'match', '^dotfiles/nvim-kickstart/') | list) +
+         [{'src': 'dotfiles/nvim-lazyvim/.config/nvim/init.lua', 'dest': devenv_home ~ '/.config/nvim/init.lua'},
+          {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/lazy.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/lazy.lua'},
+          {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/keymaps.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/keymaps.lua'},
+          {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/options.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/options.lua'},
+          {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/plugins/example.lua', 'dest': devenv_home ~ '/.config/nvim/lua/plugins/example.lua'}] }}
+  when: devenv_active_nvim_variant == 'lazyvim'
+
+- name: Filter skipped links from manifest
+  ansible.builtin.set_fact:
+    devenv_links: "{{ devenv_links | rejectattr('dest', 'in', devenv_skip_links | default([])) | list }}"
+  when: (devenv_skip_links | default([])) | length > 0
 
 - name: Load OS-specific variables
   ansible.builtin.include_vars:
@@ -54,3 +100,5 @@
       - "packages   : {{ devenv_packages_concrete | length }} concrete ({{ devenv_pkg_skip | default([]) | join(',') }} skipped as OS-provided)"
       - "python pin : {{ devenv_python_version }}   conda dir: {{ devenv_conda_dir }}"
       - "repo root  : {{ devenv_repo_root }}"
+      - "stow pkgs  : {{ devenv_stow_packages | join(', ') }}"
+      - "active nvim: {{ devenv_active_nvim_variant }} (package: {{ devenv_package_variants.nvim.variants[devenv_active_nvim_variant].package }})"

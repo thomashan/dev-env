@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-c06a172c",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-16T03:39:15.374918+00:00",
+  "updated_ts": "2026-11-16T03:39:15.374918+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1794799161-55e7b2c7",
+      "ACT-FIND-1794799160-d7d6e067"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794797329-wizard/P-1794797347-a9fe7160-antigravity-agent-gemini-3.8-flash-medium/E-1794797638-0efc6fff-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R3-001-01",
+    "symptoms": [
+      "uv pip install fails in non-virtualenv Conda environment without --prefix or --python."
+    ]
+  }
+}

@@ -17,8 +17,8 @@
     - { role: homebrew, when: "devenv_pkg_backend == 'brew'", tags: [packages, macos] }
     - { role: packages, tags: [packages] }
     - { role: dotfiles, tags: [dotfiles] }
-    - { role: uv, tags: [uv] }
     - { role: conda, tags: [conda] }
+    - { role: uv, tags: [uv] }
     - { role: node, tags: [node] }
     - { role: neovim, tags: [neovim] }
     - { role: fish, tags: [fish] }

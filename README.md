@@ -5,20 +5,76 @@ Your development environment, owned by this repository.
 `fish`, `neovim`, `conda`, `nvm`/node, and the CLI tooling around them are declared here and converged onto the machine.
 The machine is not the source of truth — this repo is.
 
-Two rules shape everything below:
+---
 
-1. **`make` bootstraps Ansible, Ansible owns the rest.** No `.sh` files in this repository.
-2. **Multi-OS by construction.** macOS and Linux are handled by the same declarative lists; package names are translated
-   per package manager, and configs never hardcode `/Users/...` or `/opt/homebrew/...`.
+## Tool Chain & Execution Order
+
+The environment enforces a pure `make -> conda -> ansible` toolchain hierarchy:
+
+```
++-----------------------------------------------------------------------+
+|                         Sole Cold-Start Prerequisite                  |
+|                             GNU Make (>= 3.81)                        |
+|   (git, curl, and uv are NOT cold-start prerequisites; git and curl   |
+|    are deferred to Ansible; uv is installed via Conda for app dev)     |
++-----------------------------------+-----------------------------------+
+                                    |
+                                    v
++-----------------------------------------------------------------------+
+|                     Step 1: make bootstrap                            |
+|  - Fetch Miniforge3 installer using curl, wget, or python3 urllib     |
+|  - Install Miniforge Conda into ~/miniforge3                          |
+|  - Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml   |
+|  - Shim Ansible tools into ~/.local/share/dev-env/bin/                |
+|  - Install Ansible collection: community.general                      |
++-----------------------------------+-----------------------------------+
+                                    |
+                                    v
++-----------------------------------------------------------------------+
+|                     Step 2: make configure                            |
+|  - Host interactive wizard: scripts/devenv_wizard.py                  |
+|  - Step A: OS / Distro & Backend detection (brew / apt)               |
+|  - Step B: Stow package & variant selection (kickstart/minimal/lazy)  |
+|  - Step C: Dotfile conflict resolution (diff, merge, adopt, backup)   |
+|  - Step D: Runtime pins & feature flags                               |
+|  - Step E: Persist user choices to ~/.config/dev-env/choices.yml       |
++-----------------------------------+-----------------------------------+
+                                    |
+                                    v
++-----------------------------------------------------------------------+
+|                     Step 3: make converge                             |
+|  - Ansible Playbook Execution (site.yml):                             |
+|    1. bootstrap : Classify host, load choices.yml & platform facts    |
+|    2. homebrew  : Install Homebrew (macOS backend)                    |
+|    3. packages  : Provision 22 core tools (git, curl, stow, etc.)     |
+|    4. dotfiles  : Unstow inactive variants, stow active packages      |
+|    5. conda     : Configure dev environment (python=3.13)             |
+|    6. uv        : Install uv, ruff, pre-commit via Conda for app dev  |
+|    7. node      : Manage Node.js runtime via nvm.fish                 |
+|    8. neovim    : Verify runtime and sync variant plugins             |
+|    9. fish      : Sync fisher plugins and configure shell             |
++-----------------------------------------------------------------------+
+```
+
+### Stage-by-Stage Execution
+
+| Stage                              | Command          | Primary Tool          | Purpose                                                              | Output / State                                |
+| ---------------------------------- | ---------------- | --------------------- | -------------------------------------------------------------------- | --------------------------------------------- |
+| **Sole Prerequisite**              | System Setup     | `GNU Make >= 3.81`    | Cold-start driver for all repo targets                               | macOS `/usr/bin/make` or Linux `make`         |
+| **Stage 0: Prerequisite Probe**    | `make check`     | POSIX shell in `make` | Read-only check of Make, OS, apt, Conda, shims, Stow, brew, git/curl | Status report (never mutates system)          |
+| **Stage 1: Ansible Bootstrap**     | `make bootstrap` | GNU Make + Conda      | Fetch Miniforge Conda, install Ansible and Python tooling via Conda  | `~/miniforge3`, `~/.local/share/dev-env/bin/` |
+| **Stage 2: Interactive Wizard**    | `make configure` | Conda Python          | Interactive host setup and dotfile conflict resolution               | `~/.config/dev-env/choices.yml`               |
+| **Stage 3: Whole-System Converge** | `make converge`  | `ansible-playbook`    | Converge packages, Stow dotfiles, runtimes, and plugins              | Fully converged system                        |
+
+> [!NOTE] `git`, `curl`, and `uv` are **not** cold-start prerequisites. `git` and `curl` are deferred to Ansible's
+> `packages` role; `uv` is installed via Conda purely as an application development tool for the user.
 
 ---
 
-## Architecture & Layout
+## Repository Setup & Worktree Architecture
 
-### Bare Repository and Worktree Structure
-
-This repository is designed to be cloned using a bare repository structure with Git worktrees, allowing multiple task
-branches to be checked out simultaneously without conflicting with the canonical workspace:
+This repository is designed to be cloned as a bare repository with Git worktrees, allowing multiple branches to be
+checked out simultaneously without interfering with active development:
 
 ```bash
 git clone --bare <repo-url> dev-env/.git
@@ -28,141 +84,115 @@ git worktree add main
 cd main
 ```
 
-Worktree layout:
+Worktree directory layout:
 
 - `dev-env/.git` (central Git database)
-- `dev-env/main` (default checkout worktree)
+- `dev-env/main` (canonical checkout worktree)
 - `dev-env/<worktree>` (isolated intent or feature worktrees)
-
-### Directory Layout
-
-```
-Makefile                    entry point: prerequisite probe, Ansible bootstrap, scoped runs
-ansible.cfg                 paths, interpreter, YAML output
-ansible/
-  site.yml                  converge order (tagged roles -> scoped runs)
-  inventory/localhost.ini   always converges the machine it runs on
-  group_vars/all.yml        THE manifest: packages, pins, links, feature flags
-  vars/os_Darwin.yml        macOS overrides (neovim from brew, no sudo for installs)
-  vars/os_Linux.yml         Linux overrides (neovim from GitHub release, sudo installs)
-  vars/pkg_brew.yml         logical name -> Homebrew formula
-  vars/pkg_apt.yml          logical name -> Debian/Ubuntu package
-  roles/                    bootstrap, homebrew, packages, dotfiles, uv, conda, node, neovim, fish
-  playbooks/unlink.yml      reversible teardown of managed symlinks
-dotfiles/
-  bash/                     .bashrc, .bash_profile (multi-OS + .local hooks)
-  conda/                    .condarc (strict conda-forge, no auto base activation)
-  fish/                     .config/fish/{config.fish, fish_plugins, conf.d/00-devenv.fish}
-  nvim/                     .config/nvim/{init.lua, nvim-pack-lock.json, .stylua.toml, lua/}
-  tmux/                     .config/tmux/tmux.conf (XDG path, needs tmux >= 3.1)
-  zsh/                      .zshrc (multi-OS + .local hooks)
-.github/workflows/          CI/CD workflows (make, hygiene, unit, network)
-tests/                      pytest test suite (manifest invariants, templating, network)
-```
-
-### GNU Stow Per-Tool Packages (`stow --no-folding`)
-
-Dotfiles are managed via GNU Stow (`stow`). Each tool configuration is isolated within its own dedicated package
-directory under `dotfiles/`:
-
-- `dotfiles/bash/`
-- `dotfiles/conda/`
-- `dotfiles/fish/`
-- `dotfiles/nvim/`
-- `dotfiles/tmux/`
-- `dotfiles/zsh/`
-
-Zero loose files reside directly under `dotfiles/` outside these package boundaries.
-
-Symlinks are applied using `stow --no-folding --restow -d dotfiles -t $HOME <packages...>`. The critical `--no-folding`
-flag prevents GNU Stow from creating directory-level symlinks when an entire directory tree belongs to a package.
-Instead, parent directories are created directly in `$HOME`, and only leaf configuration files are symlinked. This
-guarantees that machine-local state or unmanaged runtime files (such as fisher payloads, completions, and history)
-written into `$HOME/.config/` never fold into or contaminate the repository.
-
-### Machine-Local Configuration Overrides (`.local`)
-
-Each shell configuration provides explicit, gitignored hooks for machine-local customizations:
-
-- **Bash:** Sources `$HOME/.bashrc.local` at the end of `.bashrc`, and `$HOME/.bash_profile.local` in `.bash_profile`.
-- **Zsh:** Sources `$HOME/.zshrc.local` at the end of `.zshrc`.
-- **Fish:** Automatically loads machine-local configurations placed in `$__fish_config_dir/conf.d/*.fish` and functions
-  in `$fisher_path` (`~/.config/fish/local`).
 
 ---
 
-## Reference Tables
+## Commands & Workflow
 
-### 1. Prerequisites & Bootstrap Tooling
+### Quick Start (New Machine)
 
-All tooling required to bootstrap or manage the environment:
+```bash
+make check        # Read-only prerequisite probe (never modifies system)
+make bootstrap    # Provision Conda, Python 3.13, Ansible, and collections
+make configure    # Interactive wizard: select variants & resolve conflicts
+make install      # Full pipeline: check -> bootstrap -> configure -> converge
+```
 
-| Tool                | Phase        | Checked By   | Installed By     | Notes                                                              |
-| ------------------- | ------------ | ------------ | ---------------- | ------------------------------------------------------------------ |
-| `GNU Make >= 3.81`  | Host Cold    | `make check` | Host OS          | Apple `/usr/bin/make` (3.81) or Linux `apt-get install -y make`    |
-| `git`               | Host Cold    | `make check` | Host OS          | Host VCS client                                                    |
-| `curl`              | Host Cold    | `make check` | Host OS          | Host HTTP client                                                   |
-| `apt-get`           | Host Cold    | `make check` | Host OS (Linux)  | Linux package manager backend                                      |
-| `Homebrew` (`brew`) | Package Mgr  | `make check` | Host OS (macOS)  | macOS package backend (`/opt/homebrew` or `/usr/local`)            |
-| `uv`                | Bootstrap    | `make check` | `make bootstrap` | Fast Python package runner & tool manager                          |
-| `ansible-core`      | Bootstrap    | `make check` | `make bootstrap` | Converge orchestrator pinned to Python `3.13`                      |
-| `ansible-lint`      | Bootstrap    | `make check` | `make bootstrap` | Playbook linter pinned to Python `3.13`                            |
-| `community.general` | Bootstrap    | `make check` | `make bootstrap` | Ansible collection (requires `>=9.0.0`)                            |
-| `stow` (GNU Stow)   | Dotfiles Pre | `make check` | `packages` role  | Hard prerequisite for dotfiles management (`make dotfiles/unlink`) |
-| `docker-desktop`    | Optional GUI | Playbook     | Opt-in Cask      | Installed on macOS when `devenv_install_gui_casks: true`           |
+### Day-to-Day Operations
 
-### 2. Core CLI Packages (`devenv_packages_core`)
+```bash
+make converge       # Full system converge (ansible-playbook site.yml --diff)
+make check-mode     # Dry run: preview changes without modifying system
+make doctor         # Idempotence probe: dry run diff + repo integrity check
+make dotfiles       # Re-link managed dotfiles via GNU Stow (--no-folding)
+make nvim-sync      # Sync Neovim plugins at locked revisions
+make fisher         # Sync fish plugins via fisher
+make probe-packages # Package installation dry run for detected OS
+make facts          # Display resolved platform facts and package list
+make login-shell    # Make fish the default login shell (prompts for password)
+make unlink         # Reversible teardown of managed symlinks (CONFIRM=yes)
+make test           # Run unit tests via pytest (manifest & templating invariants)
+make test-all       # Run all tests including network asset checks
+make docs-fmt       # Format markdown documentation using Prettier
+```
 
-All 22 core packages defined in the declarative manifest `ansible/group_vars/all.yml`:
+---
 
-| Logical Package | macOS (`brew`) Formula | Debian/Ubuntu (`apt`) Package | Description & Notes                                            |
-| --------------- | ---------------------- | ----------------------------- | -------------------------------------------------------------- |
-| `aria2`         | `aria2`                | `aria2`                       | High-speed multi-protocol download utility                     |
-| `autossh`       | `autossh`              | `autossh`                     | Automatically restart SSH sessions and tunnels                 |
-| `curl`          | `curl`                 | `curl`                        | Command-line tool for transferring data with URLs              |
-| `delta`         | `delta`                | `git-delta`                   | Syntax-highlighting pager for git diffs                        |
-| `fd`            | `fd`                   | `fd-find`                     | Simple, fast, user-friendly alternative to `find`              |
-| `fish`          | `fish`                 | `fish`                        | Modern interactive command line shell                          |
-| `fzf`           | `fzf`                  | `fzf`                         | General-purpose command-line fuzzy finder                      |
-| `gh`            | `gh`                   | `gh`                          | GitHub official command-line interface                         |
-| `git`           | `git`                  | `git`                         | Distributed version control system                             |
-| `htop`          | `htop`                 | `htop`                        | Interactive process viewer                                     |
-| `iperf3`        | `iperf3`               | `iperf3`                      | Network bandwidth measurement tool                             |
-| `jq`            | `jq`                   | `jq`                          | Command-line JSON processor                                    |
-| `ncdu`          | `ncdu`                 | `ncdu`                        | NCurses disk usage analyzer                                    |
-| `neovim`        | `neovim`               | `neovim`                      | Hyperextensible Vim-based text editor                          |
-| `openssh`       | `openssh`              | `openssh-client`              | OpenSSH client suite for secure shell connectivity             |
-| `ripgrep`       | `ripgrep`              | `ripgrep`                     | Line-oriented search tool adhering to gitignore                |
-| `rsync`         | `rsync`                | `rsync`                       | Fast and versatile remote file copying tool                    |
-| `stow`          | `stow`                 | `stow`                        | Symlink farm manager for dotfiles packages                     |
-| `tmux`          | `tmux`                 | `tmux`                        | Terminal multiplexer (XDG path `~/.config/tmux/tmux.conf`)     |
-| `tree`          | `tree`                 | `tree`                        | Recursive directory listing program                            |
-| `unzip`         | `(OS-provided)`        | `unzip`                       | Extraction utility for zip archives (skipped in brew)          |
-| `watch`         | `watch`                | `procps`                      | Periodic command execution viewer (`procps` package on Debian) |
+## Package & Tool Inventory
 
-### 3. Runtimes, Tools, & Plugins
+### 1. Core CLI Packages (`devenv_packages_core`)
 
-#### Runtimes & Python Tools
+All 22 core packages defined in `ansible/group_vars/all.yml`:
 
-- **Python Runtime:** `CPython 3.13` (via `uv` and Conda).
-- **Python Tools (`devenv_uv_tools`):**
-  - `ruff`: Fast Python linter and code formatter.
-  - `pre-commit`: Multi-language pre-commit hooks runner.
-- **Conda:** `Miniforge3` installed to `~/miniforge3` with a default `dev` environment on `python=3.13`.
-- **Node.js:** Node version `22.23.2` managed via `nvm.fish` (single source of truth in
+| Logical Package | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                                |
+| --------------- | ---------------------- | --------------------- | ----------------------- | ---------------------------------------------------------- |
+| `aria2`         | `aria2`                | `aria2`               | Binary                  | High-speed multi-protocol download utility                 |
+| `autossh`       | `autossh`              | `autossh`             | Binary                  | Automatically restarts SSH sessions and tunnels            |
+| `curl`          | `curl`                 | `curl`                | Binary                  | Command-line tool for transferring data with URLs          |
+| `delta`         | `delta`                | `git-delta`           | Binary                  | Syntax-highlighting pager for git diffs                    |
+| `fd`            | `fd`                   | `fd-find`             | Binary                  | Fast, user-friendly alternative to `find`                  |
+| `fish`          | `fish`                 | `fish`                | Stow package (`fish`)   | Smart and user-friendly command line shell                 |
+| `fzf`           | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder                  |
+| `gh`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                          |
+| `git`           | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system          |
+| `htop`          | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor              |
+| `iperf3`        | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                         |
+| `jq`            | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor       |
+| `ncdu`          | `ncdu`                 | `ncdu`                | Binary                  | NCurses disk usage analyzer                                |
+| `neovim`        | `neovim`               | `neovim`              | Stow package (`nvim-*`) | Hyperextensible Vim-based text editor                      |
+| `openssh`       | `openssh`              | `openssh-client`      | Binary                  | OpenSSH secure connectivity client suite                   |
+| `ripgrep`       | `ripgrep`              | `ripgrep`             | Binary                  | Line-oriented search tool respecting gitignore             |
+| `rsync`         | `rsync`                | `rsync`               | Binary                  | Fast, versatile file copying and synchronization tool      |
+| `stow`          | `stow`                 | `stow`                | Binary                  | Symlink farm manager for dotfiles packages                 |
+| `tmux`          | `tmux`                 | `tmux`                | Stow package (`tmux`)   | Terminal multiplexer (XDG path `~/.config/tmux/tmux.conf`) |
+| `tree`          | `tree`                 | `tree`                | Binary                  | Recursive directory listing visualizer                     |
+| `unzip`         | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)      |
+| `watch`         | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian)    |
+
+### 2. Language Runtimes & Conda Application-Dev Tools
+
+- **Python Runtime:** `CPython 3.13` provisioned via `Miniforge3` into `~/miniforge3`.
+- **Conda Development Tools (`devenv_uv_tools`):**
+  - `uv`: Extremely fast Python package manager and resolver installed via Conda for app dev.
+  - `ruff`: Fast Python linter and code formatter installed via Conda.
+  - `pre-commit`: Multi-language pre-commit hook orchestrator installed via Conda.
+- **Node.js Runtime:** Pinned default version `22.23.2` managed via `nvm.fish` (declared in
   `dotfiles/fish/.config/fish/conf.d/00-devenv.fish`).
 
-#### Fish Plugins (`fish_plugins`)
+### 3. GNU Stow Packages & Config Variants (`devenv_package_variants`)
+
+Dotfiles are managed via GNU Stow with the `--no-folding` flag, keeping leaf configuration symlinked while directories
+remain real local folders:
+
+- `dotfiles/bash/`: `.bashrc`, `.bash_profile` (with `.local` override hooks)
+- `dotfiles/conda/`: `.condarc` (strict conda-forge channel configuration)
+- `dotfiles/fish/`: `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
+- `dotfiles/tmux/`: `~/.config/tmux/tmux.conf`
+- `dotfiles/zsh/`: `.zshrc` (with `.local` override hooks)
+- **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`):**
+  - `nvim-kickstart` (`dotfiles/nvim-kickstart/`): Full Kickstart.nvim configuration with `vim.pack`, LSP, Treesitter,
+    and locked plugin revisions. Default variant.
+  - `nvim-minimal` (`dotfiles/nvim-minimal/`): Lightweight, blazing fast Neovim configuration using built-in settings
+    and standard keymaps.
+  - `nvim-lazyvim` (`dotfiles/nvim-lazyvim/`): LazyVim starter distribution configuration with structured plugin
+    imports.
+
+### 4. Fish Shell Plugins (`fish_plugins`)
 
 Managed by `fisher`:
 
-- `jorgebucaran/fisher`: Fish plugin manager.
-- `reitzig/sdkman-for-fish@v2.1.0`: Fish shell integration for SDKMAN.
-- `jorgebucaran/nvm.fish`: Node.js version manager wrapper for Fish.
+1. `jorgebucaran/fisher`: Fish plugin manager.
+2. `reitzig/sdkman-for-fish@v2.1.0`: Fish shell integration for SDKMAN.
+3. `jorgebucaran/nvm.fish`: Node.js version manager wrapper for Fish.
 
-#### Neovim Plugins (`nvim-pack-lock.json`)
+### 5. Neovim Plugins (`nvim-pack-lock.json`)
 
-All 26 plugins managed via `vim.pack` and locked to specific commit revisions:
+All 26 plugins managed via `vim.pack` and locked to explicit commit hashes:
 
 1. `LuaSnip` (`https://github.com/L3MON4D3/LuaSnip`)
 2. `blink.cmp` (`https://github.com/saghen/blink.cmp`)
@@ -191,125 +221,45 @@ All 26 plugins managed via `vim.pack` and locked to specific commit revisions:
 25. `tokyonight.nvim` (`https://github.com/folke/tokyonight.nvim`)
 26. `which-key.nvim` (`https://github.com/folke/which-key.nvim`)
 
-#### Purged / Unmanaged Packages (`devenv_packages_remove`)
+### 6. macOS GUI Casks & Purged Unmanaged Packages
 
-When `devenv_remove_unmanaged: true` is opted in, these conflicting duplicate packages are purged:
-
-- `nvm`: Homebrew formula conflicts with `nvm.fish` and attempts to manage `~/.nvm`.
-- `node`: System / Homebrew node package shadowing nvm-managed Node.js binaries.
-
----
-
-## Getting Started
-
-There is deliberately **no `curl | sh`** bootstrap. The only prerequisite is GNU Make:
-
-| Platform        | Cold start                                                         |
-| --------------- | ------------------------------------------------------------------ |
-| macOS           | `xcode-select --install` (provides `/usr/bin/make`, GNU Make 3.81) |
-| Debian / Ubuntu | `sudo apt-get install -y make git curl`                            |
-
-Then:
-
-```bash
-make check        # read-only prerequisite probe; installs nothing
-make bootstrap    # installs uv -> ansible-core + ansible-lint -> community.general
-make install      # check + bootstrap + converge with --diff
-```
-
-Day-to-day:
-
-```bash
-make check-mode     # ansible --check --diff : what would change
-make doctor         # dry run + repo-write check + tracked dotfiles
-make dotfiles       # re-link dotfiles via stow --no-folding
-make nvim-sync      # install Neovim plugins at locked revisions
-make fisher         # sync fish plugins from dotfiles/fish/.config/fish/fish_plugins
-make probe-packages # package installs in --check mode for this OS
-make facts          # resolved platform facts + concrete package list
-make lint           # ansible-lint
-make unlink CONFIRM=yes   # remove the managed symlinks via stow --delete
-```
+- **GUI Casks (`devenv_casks`):** `docker-desktop` (installed when `devenv_install_gui_casks: true`).
+- **Purged Duplicate Packages (`devenv_packages_remove`):** `nvm`, `node` (purged when `devenv_remove_unmanaged: true`
+  to prevent conflicts with `nvm.fish`).
 
 ---
 
-## How the Multi-OS Abstraction Works
+## Interactive Wizard & Conflict Resolution
 
-You never write `brew install ...`. You add a **logical** name once:
+Run `make configure` (or let `make install` launch it on interactive TTYs) to execute `scripts/devenv_wizard.py`.
 
-```yaml
-# ansible/group_vars/all.yml
-devenv_packages_core:
-  - fzf
-```
+The wizard guides you through five sequential steps:
 
-...and give it a name in each backend table (`ansible/vars/pkg_brew.yml`, `ansible/vars/pkg_apt.yml`). The `bootstrap`
-role asserts that every logical name has an alias for the detected backend and aborts with the missing names listed,
-rather than passing a guessed package name to `apt`. Names the OS already ships are dropped via `devenv_pkg_skip` (macOS
-ships `unzip`, Homebrew has no formula for it).
-
-Backends that have no alias table are refused outright — `devenv_supported_backends` is `brew` and `apt`, so an Arch or
-Fedora host fails loudly instead of half-installing.
-
-Runtimes that are not OS packages are installed identically everywhere:
-
-| Runtime                             | Mechanism                                                         |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| Python for Ansible tooling          | `uv tool install --python 3.13 ansible-core`                      |
-| Python tools (`ruff`, `pre-commit`) | `uv tool install`                                                 |
-| Conda                               | Miniforge upstream installer into `~/miniforge3` on **both** OSes |
-| Node                                | `nvm.fish` + `$XDG_DATA_HOME/nvm/current` symlink                 |
-| Neovim plugins                      | `vim.pack` + committed `nvim-pack-lock.json`                      |
-
-Miniforge deliberately does **not** use the Homebrew cask: the cask pins conda to
-`/opt/homebrew/Caskroom/miniforge/base`, which would force an OS branch into every config file. Installing to
-`~/miniforge3` on macOS and Linux keeps one path, so `dotfiles/fish/.config/fish/config.fish`, `dotfiles/bash/.bashrc`,
-and `dotfiles/zsh/.zshrc` probe a candidate list with no `uname` switch for conda.
-
----
-
-## Decisions This Repo Makes
-
-- **nvm owns node.** Nothing installs node directly. Shell configs prepend `$XDG_DATA_HOME/nvm/current/bin` before
-  `~/.local/bin`, and the `node` role asserts that a login shell resolves node through nvm — a failed converge, not a
-  silent wrong `node`.
-- **The node pin lives in the fish config**, not in Ansible vars. The `node` role parses `devenv_node_default_version`
-  out of `dotfiles/fish/.config/fish/conf.d/00-devenv.fish`, so the shell and the playbook cannot disagree.
-- **GNU Stow with `--no-folding` manages dotfiles.** Packages live in `dotfiles/<pkg>/`. The `--no-folding` flag ensures
-  directories in `$HOME` are real folders and only individual configuration files are symlinked.
-- **fisher payloads stay out of the repo.** `fisher_path` is `$__fish_config_dir/local`, so plugin code lands in a
-  gitignored directory and `git status` stays clean.
-- **`fish_variables` is not version controlled.** It is machine-local universal-variable state. Anything that must be
-  equal on every machine is declared in `config.fish` / `conf.d/00-devenv.fish` instead.
-- **Existing configs are backed up, never deleted.** Real files sitting where a link belongs are moved to
-  `~/.local/share/dev-env/backup/<timestamp>/` first.
-
----
-
-## Status and Known Gaps
-
-Read this before trusting it.
-
-- **Converged on macOS: not yet run.** Validated so far: `make check`, `make bootstrap`, `make facts`,
-  `make probe-packages`, and a `--check --diff` dry run of the `dotfiles` role.
-- **Linux is unvalidated.** The apt alias table follows Debian/Ubuntu naming conventions (`fd-find`, `procps`,
-  `git-delta`, `openssh-client`) but has not been run on a live host. Start there with `make probe-packages`.
-- `community.general` has **no** conda/miniforge/nvm modules (checked upstream), so those roles shell out to the
-  upstream installers under `creates:` guards. That is the intended design, not an oversight.
-- `--check` mode cannot simulate `command`-based installs, so a full `make check-mode` on a fresh host will fail on the
-  runtime assertions; use per-role dry runs (`probe-packages`, `dotfiles`).
-- GUI casks (`docker-desktop`, browsers) are declared but off by default (`devenv_install_gui_casks`).
-- No `Brewfile` on purpose: `ansible/group_vars/all.yml` is the single package manifest.
+1. **Step A (Platform Confirmation):** Inspects host platform and confirms package backend (`brew` or `apt`).
+2. **Step B (Stow Package & Variant Selection):** Selects active Stow packages and chooses your Neovim distribution
+   (`kickstart`, `minimal`, or `lazyvim`).
+3. **Step C (Dotfile Conflict Resolution):** Compares repo files with existing `$HOME` files. For any differing file,
+   you are prompted:
+   - `[d]` **Diff:** Displays colorized or unified diff (`delta` / `diff -u`).
+   - `[m]` **Merge:** Launches an interactive three-way merge in `$EDITOR -d` (`nvim -d`), backing up the original.
+   - `[l]` **Local Override:** Extracts your personal custom lines to `.local` override files (`~/.bashrc.local`,
+     `~/.zshrc.local`, `~/.config/fish/conf.d/99-local.fish`).
+   - `[a]` **Adopt:** Adopts the local file into the repository's package directory, backing up the original.
+   - `[b]` **Backup & Replace:** Backs up the local file to `~/.local/share/dev-env/backup/` and allows Stow to link the
+     repo version.
+   - `[s]` **Skip:** Leaves the destination untouched and appends the path to `devenv_skip_links`.
+4. **Step D (Feature Flags & Runtime Pins):** Confirms login shell change to fish, GUI casks, unmanaged package removal,
+   and runtime version pins.
+5. **Step E (Persist Choices):** Writes configuration to `~/.config/dev-env/choices.yml`.
 
 ---
 
 ## CI/CD Pipeline
 
-Continuous integration is orchestrated via GitHub Actions workflows in `.github/workflows/`:
+Continuous integration workflows run across macOS and Linux on GitHub Actions (`.github/workflows/`):
 
-- **Make Check (`make.yml`)**: Multi-OS matrix (`ubuntu-latest`, `macos-latest`) testing `make help` and `make check`.
-- **Code Hygiene & Lint (`test-hygiene.yml`)**: Verifies lockfile currency (`uv lock --check`), Ruff linting
-  (`uv run ruff check .`), Prettier markdown formatting, and Ansible playbook linting (`ansible-lint`).
-- **Unit Tests (`test-unit.yml`)**: Multi-OS unit test execution running `uv run --extra test pytest -m "not network"`.
-- **Network Upstream Asset Tests (`test-network.yml`)**: Scheduled and manual validation confirming upstream download
-  URLs and installer filenames remain reachable (`DEVENV_NETWORK_TESTS=1`).
+- **`make.yml`**: Validates GNU Make 3.81 compatibility, `make help`, and `make check`.
+- **`test-hygiene.yml`**: Runs `uv lock --check`, `ruff check .`, `ansible-lint`, and Prettier markdown formatting
+  checks.
+- **`test-unit.yml`**: Executes test suites under `tests/` (`pytest -m "not network"`).
+- **`test-network.yml`**: Validates upstream installer URLs and release assets (`DEVENV_NETWORK_TESTS=1`).
