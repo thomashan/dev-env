@@ -11,64 +11,22 @@ The machine is not the source of truth — this repo is.
 
 The environment enforces a pure `make -> conda -> ansible` toolchain hierarchy:
 
-```
-+-----------------------------------------------------------------------+
-|                         Sole Cold-Start Prerequisite                  |
-|                             GNU Make (>= 3.81)                        |
-|   (git, curl, and uv are NOT cold-start prerequisites; git and curl   |
-|    are deferred to Ansible; uv is installed via Conda for app dev)     |
-+-----------------------------------+-----------------------------------+
-                                    |
-                                    v
-+-----------------------------------------------------------------------+
-|                     Step 1: make bootstrap                            |
-|  - Install curl via brew (macOS) or apt (Linux) if absent             |
-|  - Fetch Miniforge3 installer using curl only                         |
-|  - Install Miniforge Conda into ~/miniforge3                          |
-|  - Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml   |
-|  - Shim Ansible tools into ~/.local/share/dev-env/bin/                |
-|  - Install Ansible collection: community.general                      |
-+-----------------------------------+-----------------------------------+
-                                    |
-                                    v
-+-----------------------------------------------------------------------+
-|                     Step 2: make configure                            |
-|  - Host interactive wizard: scripts/devenv_wizard.py                  |
-|  - Step A: OS / Distro & Backend detection (brew / apt)               |
-|  - Step B: Stow package & variant selection (kickstart/minimal/lazy)  |
-|  - Step C: Dotfile conflict resolution (diff, merge, adopt, backup)   |
-|  - Step D: Runtime pins & feature flags                               |
-|  - Step E: Persist user choices to ~/.config/dev-env/choices.yml       |
-+-----------------------------------+-----------------------------------+
-                                    |
-                                    v
-+-----------------------------------------------------------------------+
-|                     Step 3: make converge                             |
-|  - Ansible Playbook Execution (site.yml):                             |
-|    1. bootstrap : Classify host, load choices.yml & platform facts    |
-|    2. homebrew  : Install Homebrew (macOS backend)                    |
-|    3. packages  : Provision 22 core tools (git, curl, stow, etc.)     |
-|    4. dotfiles  : Unstow inactive variants, stow active packages      |
-|    5. conda     : Configure dev environment (python=3.13)             |
-|    6. uv        : Install uv, ruff, pre-commit via Conda for app dev  |
-|    7. node      : Manage Node.js runtime via nvm.fish                 |
-|    8. neovim    : Verify runtime and sync variant plugins             |
-|    9. fish      : Sync fisher plugins and configure shell             |
-+-----------------------------------------------------------------------+
+```mermaid
+flowchart TD
+    A["Prerequisite: System Package Manager<br/>- brew (macOS) or apt (Linux)<br/>- Installs GNU Make (>= 3.81) if absent"] --> B["Step 1: make bootstrap<br/>- Verify brew (macOS) or apt (Linux) is present (fail if missing)<br/>- Install curl via brew or apt if absent<br/>- Fetch Miniforge3 installer using curl -fsSL<br/>- Install Miniforge Conda into ~/miniforge3<br/>- Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml<br/>- Install Ansible collection: community.general"]
+    B --> C["Step 2: make configure<br/>- Interactive host wizard: scripts/devenv_wizard.py<br/>- Persist user choices to ~/.config/dev-env/choices.yml"]
+    C --> D["Step 3: make converge<br/>- Ansible Playbook Execution (site.yml):<br/>  1. bootstrap<br/>  2. homebrew<br/>  3. packages (git, curl, stow, etc.)<br/>  4. dotfiles<br/>  5. conda (python=3.13 env + uv, ruff, pre-commit)<br/>  6. node<br/>  7. neovim<br/>  8. fish"]
 ```
 
 ### Stage-by-Stage Execution
 
-| Stage                              | Command          | Primary Tool          | Purpose                                                              | Output / State                                |
-| ---------------------------------- | ---------------- | --------------------- | -------------------------------------------------------------------- | --------------------------------------------- |
-| **Sole Prerequisite**              | System Setup     | `GNU Make >= 3.81`    | Cold-start driver for all repo targets                               | macOS `/usr/bin/make` or Linux `make`         |
-| **Stage 0: Prerequisite Probe**    | `make check`     | POSIX shell in `make` | Read-only check of Make, OS, apt, Conda, shims, Stow, brew, git/curl | Status report (never mutates system)          |
-| **Stage 1: Ansible Bootstrap**     | `make bootstrap` | GNU Make + Conda      | Fetch Miniforge Conda, install Ansible and Python tooling via Conda  | `~/miniforge3`, `~/.local/share/dev-env/bin/` |
-| **Stage 2: Interactive Wizard**    | `make configure` | Conda Python          | Interactive host setup and dotfile conflict resolution               | `~/.config/dev-env/choices.yml`               |
-| **Stage 3: Whole-System Converge** | `make converge`  | `ansible-playbook`    | Converge packages, Stow dotfiles, runtimes, and plugins              | Fully converged system                        |
-
-> [!NOTE] `git`, `curl`, and `uv` are **not** cold-start prerequisites. `git` and `curl` are deferred to Ansible's
-> `packages` role; `uv` is installed via Conda purely as an application development tool for the user.
+| Stage                              | Command          | Primary Tool                        | Purpose                                                                                                  | Output / State                                                      |
+| ---------------------------------- | ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Prerequisite**                   | `System Setup`   | `brew` (macOS) or `apt` (Linux)     | System package manager (installs `make`, `curl`, and host packages)                                      | `brew` or `apt` on host                                             |
+| **Stage 0: Prerequisite Probe**    | `make check`     | POSIX shell in `make`               | Read-only check of `GNU Make`, `OS`, `brew`/`apt`, `Conda`, and `Ansible`                                | Status report (never mutates system; fails if `brew`/`apt` missing) |
+| **Stage 1: Ansible Bootstrap**     | `make bootstrap` | `GNU Make` + `brew`/`apt` + `Conda` | Verify `brew`/`apt`, install `curl` if absent, fetch Miniforge Conda, install Ansible and Python tooling | `~/miniforge3`, `~/.local/share/dev-env/collections/`               |
+| **Stage 2: Interactive Wizard**    | `make configure` | Conda Python                        | Interactive host setup and dotfile conflict resolution                                                   | `~/.config/dev-env/choices.yml`                                     |
+| **Stage 3: Whole-System Converge** | `make converge`  | `ansible-playbook`                  | Converge packages, Stow dotfiles, runtimes, and plugins                                                  | Fully converged system                                              |
 
 ---
 
@@ -79,10 +37,9 @@ checked out simultaneously without interfering with active development:
 
 ```bash
 git clone --bare <repo-url> dev-env/.git
-cd dev-env
-git config core.bare false
-git worktree add main
-cd main
+git --git-dir=dev-env/.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git --git-dir=dev-env/.git fetch origin
+git --git-dir=dev-env/.git worktree add dev-env/main main
 ```
 
 Worktree directory layout:
@@ -155,11 +112,11 @@ All 22 core packages defined in `ansible/group_vars/all.yml`:
 | `unzip`         | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)      |
 | `watch`         | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian)    |
 
-### 2. Language Runtimes & Conda Application-Dev Tools
+### 2. Language Runtimes & Conda Tools
 
 - **Python Runtime:** `CPython 3.13` provisioned via `Miniforge3` into `~/miniforge3`.
-- **Conda Development Tools (`devenv_uv_tools`):**
-  - `uv`: Extremely fast Python package manager and resolver installed via Conda for app dev.
+- **Conda Tools (`devenv_conda_tools`):**
+  - `uv`: Extremely fast Python package manager and resolver installed via Conda.
   - `ruff`: Fast Python linter and code formatter installed via Conda.
   - `pre-commit`: Multi-language pre-commit hook orchestrator installed via Conda.
 - **Node.js Runtime:** Pinned default version `22.23.2` managed via `nvm.fish` (declared in

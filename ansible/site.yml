@@ -6,7 +6,7 @@
 #   bootstrap -> classify host and load alias tables (fails early otherwise)
 #   homebrew/packages -> tools that everything else shells out to
 #   dotfiles  -> links must exist before conda/node/neovim/fish validate them
-#   uv/conda/node/neovim/fish -> runtimes and their assertions
+#   conda/node/neovim/fish -> runtimes and their assertions
 - name: Set up the dev environment
   hosts: control
   gather_facts: true
@@ -18,7 +18,6 @@
     - { role: packages, tags: [packages] }
     - { role: dotfiles, tags: [dotfiles] }
     - { role: conda, tags: [conda] }
-    - { role: uv, tags: [uv] }
     - { role: node, tags: [node] }
     - { role: neovim, tags: [neovim] }
     - { role: fish, tags: [fish] }

@@ -17,12 +17,9 @@ CONDA_DIR   ?= $(HOME)/miniforge3
 CONDA       ?= $(CONDA_DIR)/bin/conda
 DEVENV_HOME := $(HOME)/.local/share/dev-env
 COLLECTIONS := $(DEVENV_HOME)/collections
-# Space-free shims. Every recipe below uses these links so no recipe path
-# ever contains a space (which would need quoting in multiple places).
-BIN         := $(DEVENV_HOME)/bin
-PB          := $(BIN)/ansible-playbook
-GALAXY      := $(BIN)/ansible-galaxy
-LINT        := $(BIN)/ansible-lint
+PB          := $(CONDA_DIR)/bin/ansible-playbook
+GALAXY      := $(CONDA_DIR)/bin/ansible-galaxy
+LINT        := $(CONDA_DIR)/bin/ansible-lint
 SITE        := $(SELF_DIR)/ansible/site.yml
 
 # The target interpreter comes from ansible_playbook_python (see group_vars),
@@ -39,7 +36,7 @@ endif
 
 # --- refuse to run under a non-GNU make, before any target executes ---------
 ifeq ($(origin MAKE_VERSION),undefined)
-$(error dev-env requires GNU Make. macOS: xcode-select --install (ships /usr/bin/make). Debian/Ubuntu: apt install -y make)
+$(error dev-env requires Homebrew (macOS) or apt (Debian/Ubuntu). If make is not installed yet, install it via 'brew install make' (or xcode-select --install) on macOS or 'sudo apt install -y make' on Linux before running make install)
 endif
 MAKE_OK := $(shell expr $(firstword $(subst ., ,$(MAKE_VERSION))) \>= 3 2>/dev/null)
 ifeq ($(MAKE_OK),0)
@@ -79,8 +76,9 @@ help:
 	@printf "  %-16s %s\n" "docs-fmt"       "Prettier for markdown (skipped without npx)"
 	@printf "  %-16s %s\n" "clean-cache"    "Delete downloaded installers in ~/.cache/dev-env"
 	@echo ""
-	@echo "Cold start on a machine without make: install GNU Make first (macOS:"
-	@echo "xcode-select --install; Debian/Ubuntu: sudo apt install -y make),"
+	@echo "Cold start on a machine without make: Homebrew (macOS) or apt (Debian/Ubuntu)"
+	@echo "is required. If make is not installed yet, install it via 'brew install make'"
+	@echo "(or xcode-select --install) on macOS or 'sudo apt install -y make' on Linux,"
 	@echo "then run 'make install'. There is no curl | sh bootstrap by design."
 	@echo ""
 
@@ -93,7 +91,11 @@ check:
 	case "$$(uname -s)" in Darwin|Linux) echo "supported ($$(uname -s))";; *) echo "UNSUPPORTED: $$(uname -s)"; err=$$((err+1));; esac; \
 	printf "%-26s " "apt (Linux backend)"; \
 	case "$$(uname -s)" in Linux) \
-		if command -v apt >/dev/null 2>&1; then echo "ok"; else echo "UNSUPPORTED distro: only apt is supported in v1"; err=$$((err+1)); fi;; \
+		if command -v apt >/dev/null 2>&1; then echo "ok"; else echo "MISSING: apt is required"; err=$$((err+1)); fi;; \
+		*) echo "n/a";; esac; \
+	printf "%-26s " "brew (macOS backend)"; \
+	case "$$(uname -s)" in Darwin) \
+		if [ -x /opt/homebrew/bin/brew ] || [ -x /usr/local/bin/brew ] || command -v brew >/dev/null 2>&1; then echo "ok"; else echo "MISSING: Homebrew (brew) is required"; err=$$((err+1)); fi;; \
 		*) echo "n/a";; esac; \
 	printf "%-26s " "conda"; \
 	if [ -x "$(CONDA)" ]; then conda_ver=$$("$(CONDA)" --version 2>/dev/null | head -1); echo "ok ($$conda_ver)"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
@@ -101,16 +103,6 @@ check:
 	if [ -x "$(PB)" ]; then echo "ok"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
 	printf "%-26s " "community.general"; \
 	if ls "$(COLLECTIONS)/ansible_collections/community/general" >/dev/null 2>&1; then echo "ok"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
-	printf "%-26s " "stow"; \
-	if command -v stow >/dev/null 2>&1; then echo "ok ($$(command -v stow))"; else echo "will be installed by Ansible packages role"; warn=$$((warn+1)); fi; \
-	printf "%-26s " "brew (macOS backend)"; \
-	case "$$(uname -s)" in Darwin) \
-		if [ -x /opt/homebrew/bin/brew ] || [ -x /usr/local/bin/brew ]; then echo "ok"; else echo "MISSING -- bootstrap installs it (needs sudo)"; warn=$$((warn+1)); fi;; \
-		*) echo "n/a";; esac; \
-	for tool in git curl; do \
-		printf "%-26s " "$$tool"; \
-		if command -v "$$tool" >/dev/null 2>&1; then echo "ok ($$(command -v $$tool))"; else echo "deferred: will be installed by Ansible packages role"; fi; \
-	done; \
 	echo ""; \
 	if [ $$err -gt 0 ]; then echo "FAILED: $$err critical prerequisite(s) missing."; exit 1; fi; \
 	if [ $$warn -gt 0 ]; then echo "ok: core prerequisites present, $$warn item(s) will be installed by 'make bootstrap'."; \
@@ -118,9 +110,20 @@ check:
 
 bootstrap:
 	@echo "Bootstrapping Ansible via Conda (GNU Make -> Conda -> Ansible)..."
-	@if [ ! -x "$(CONDA)" ]; then \
+	@os="$$(uname -s)"; \
+	case "$$os" in \
+		Darwin) \
+			brew_bin=""; \
+			if [ -x /opt/homebrew/bin/brew ]; then brew_bin="/opt/homebrew/bin/brew"; \
+			elif [ -x /usr/local/bin/brew ]; then brew_bin="/usr/local/bin/brew"; \
+			elif command -v brew >/dev/null 2>&1; then brew_bin="$$(command -v brew)"; fi; \
+			if [ -z "$$brew_bin" ]; then echo "Error: Homebrew (brew) is required on macOS." >&2; exit 1; fi ;; \
+		Linux) \
+			command -v apt >/dev/null 2>&1 || { echo "Error: apt is required on Linux." >&2; exit 1; } ;; \
+		*) echo "Unsupported OS: $$os" >&2; exit 1 ;; \
+	esac; \
+	if [ ! -x "$(CONDA)" ]; then \
 		echo "Installing Miniforge Conda into $(CONDA_DIR)..."; \
-		os="$$(uname -s)"; \
 		arch="$$(uname -m)"; \
 		case "$$os" in \
 			Darwin) \
@@ -133,7 +136,7 @@ bootstrap:
 					arm64|aarch64) installer="Miniforge3-Linux-aarch64.sh" ;; \
 					*) installer="Miniforge3-Linux-x86_64.sh" ;; \
 				esac ;; \
-			*) echo "Unsupported OS for Miniforge: $$os"; exit 1 ;; \
+			*) echo "Unsupported OS for Miniforge: $$os" >&2; exit 1 ;; \
 		esac; \
 		mkdir -p "$$HOME/.cache/dev-env"; \
 		target="$$HOME/.cache/dev-env/$$installer"; \
@@ -142,22 +145,13 @@ bootstrap:
 			if ! command -v curl >/dev/null 2>&1; then \
 				case "$$os" in \
 					Darwin) \
-						brew_bin=""; \
-						if [ -x /opt/homebrew/bin/brew ]; then brew_bin="/opt/homebrew/bin/brew"; \
-						elif [ -x /usr/local/bin/brew ]; then brew_bin="/usr/local/bin/brew"; \
-						elif command -v brew >/dev/null 2>&1; then brew_bin="$$(command -v brew)"; fi; \
-						if [ -n "$$brew_bin" ]; then \
-							"$$brew_bin" install curl || exit 1; \
-						else \
-							echo "Error: curl is missing and Homebrew was not found to install it. Please install curl or Homebrew." >&2; exit 1; \
-						fi ;; \
+						"$$brew_bin" install curl || exit 1 ;; \
 					Linux) \
 						if [ "$$(id -u)" -ne 0 ]; then \
 							sudo apt update && sudo apt install -y curl || exit 1; \
 						else \
 							apt update && apt install -y curl || exit 1; \
 						fi ;; \
-					*) echo "Unsupported OS to install curl: $$os"; exit 1 ;; \
 				esac; \
 			fi; \
 			echo "Fetching $$url..."; \
@@ -166,11 +160,8 @@ bootstrap:
 		/bin/bash "$$target" -b -u -p "$(CONDA_DIR)" || exit 1; \
 	fi
 	@"$(CONDA)" install -y -c conda-forge --override-channels python=3.13 ansible-core ansible-lint pyyaml || exit 1
-	@mkdir -p "$(DEVENV_HOME)" "$(BIN)" "$(COLLECTIONS)"
-	@ln -sfn "$(CONDA_DIR)/bin/ansible-playbook" "$(PB)"
-	@ln -sfn "$(CONDA_DIR)/bin/ansible-galaxy" "$(GALAXY)"
-	@ln -sfn "$(CONDA_DIR)/bin/ansible-lint" "$(LINT)"
-	@test -x "$(PB)" || { echo "bootstrap: shim $(PB) is broken"; exit 1; }
+	@mkdir -p "$(DEVENV_HOME)" "$(COLLECTIONS)"
+	@test -x "$(PB)" || { echo "bootstrap: $(PB) is missing or not executable"; exit 1; }
 	@ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
 		-r "$(SELF_DIR)/ansible/requirements.yml" --force || exit 1
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"

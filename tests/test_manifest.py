@@ -315,13 +315,6 @@ def test_stow_is_declared_in_core_packages(group_vars):
     assert "stow" in group_vars["devenv_packages_core"], "stow must be in devenv_packages_core"
 
 
-def test_makefile_check_probes_stow():
-    makefile = read(REPO_ROOT / "Makefile")
-    assert 'printf "%-26s " "stow"' in makefile or "command -v stow" in makefile, (
-        "Makefile check target must probe stow"
-    )
-
-
 def test_stow_packages_match_dotfiles_subdirectories(group_vars):
     dotfiles_dir = REPO_ROOT / "dotfiles"
     pkg_dirs = {p.name for p in dotfiles_dir.iterdir() if p.is_dir()}
@@ -365,8 +358,8 @@ def test_readme_manifest_coverage(group_vars):
     readme = read(REPO_ROOT / "README.md")
     for pkg in group_vars["devenv_packages_core"]:
         assert pkg in readme, f"README.md missing core package: {pkg}"
-    for tool in group_vars["devenv_uv_tools"]:
-        assert tool in readme, f"README.md missing uv tool: {tool}"
+    for tool in group_vars["devenv_conda_tools"]:
+        assert tool in readme, f"README.md missing conda tool: {tool}"
     fish_plugins_text = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "fish_plugins")
     for line in fish_plugins_text.splitlines():
         line = line.strip()
@@ -379,32 +372,60 @@ def test_readme_manifest_coverage(group_vars):
         assert plugin_name in readme or entry["src"] in readme, f"README.md missing Neovim plugin: {plugin_name}"
 
 
-def test_no_astral_or_uv_tool_install_in_makefile_or_uv_role():
-    makefile = read(REPO_ROOT / "Makefile")
-    uv_role = read(REPO_ROOT / "ansible" / "roles" / "uv" / "tasks" / "main.yml")
-    for content, src in [(makefile, "Makefile"), (uv_role, "uv role")]:
-        assert "astral.sh/uv/install.sh" not in content, f"{src} still references astral.sh/uv/install.sh"
-        assert "uv tool install" not in content, f"{src} still uses uv tool install"
-
-
-def test_conda_runs_before_uv_in_site_yml():
+def test_uv_role_deleted_and_absent_from_site_yml():
+    uv_role_dir = REPO_ROOT / "ansible" / "roles" / "uv"
+    assert not uv_role_dir.exists(), "ansible/roles/uv directory must not exist"
     site = yaml.safe_load(read(REPO_ROOT / "ansible" / "site.yml"))
     roles = [entry["role"] for entry in site[0]["roles"] if isinstance(entry, dict) and "role" in entry]
-    assert "conda" in roles, "conda role missing from site.yml"
-    assert "uv" in roles, "uv role missing from site.yml"
-    assert roles.index("conda") < roles.index("uv"), "conda role must execute before uv role in site.yml"
+    assert "uv" not in roles, "uv role must be absent from site.yml"
 
 
-def test_makefile_check_probes_make_and_conda_without_hard_git_curl_uv():
+def test_devenv_conda_tools_manifest_and_role(group_vars):
+    assert group_vars.get("devenv_conda_tools") == ["uv", "ruff", "pre-commit"]
+    conda_tasks = read(REPO_ROOT / "ansible" / "roles" / "conda" / "tasks" / "main.yml")
+    assert "devenv_conda_tools" in conda_tasks
+    assert 'creates: "{{ devenv_conda_dir }}/bin/uv"' in conda_tasks
+
+
+def test_makefile_no_shims_and_direct_conda_bins():
     makefile = read(REPO_ROOT / "Makefile")
-    assert "GNU Make" in makefile
-    assert "conda" in makefile
-    # uv must not be checked as a prerequisite in make check
+    assert "astral.sh/uv/install.sh" not in makefile
+    assert "uv tool install" not in makefile
+    assert "BIN :=" not in makefile
+    assert "ln -sfn" not in makefile
+    assert "PB          := $(CONDA_DIR)/bin/ansible-playbook" in makefile
+    assert "GALAXY      := $(CONDA_DIR)/bin/ansible-galaxy" in makefile
+    assert "LINT        := $(CONDA_DIR)/bin/ansible-lint" in makefile
+
+
+def test_makefile_check_probes_prerequisites_strictly():
+    makefile = read(REPO_ROOT / "Makefile")
     check_target = makefile.split("check:")[1].split("bootstrap:")[0]
-    assert 'printf "%-26s " "uv"' not in check_target, "uv should not be probed in make check"
-    assert "deferred: will be installed by Ansible packages role" in check_target, (
-        "git/curl must be deferred informational checks"
-    )
+    expected_probes = [
+        "GNU Make",
+        "OS",
+        "apt (Linux backend)",
+        "brew (macOS backend)",
+        "conda",
+        "ansible-core",
+        "community.general",
+    ]
+    for probe in expected_probes:
+        assert probe in check_target, f"check target missing probe for {probe}"
+    assert "MISSING: Homebrew (brew) is required" in check_target
+    assert "MISSING: apt is required" in check_target
+    assert "err=$$((err+1))" in check_target
+    for forbidden in ["uv", "stow", "git", "curl"]:
+        assert f'"{forbidden}"' not in check_target, f"{forbidden} should not be probed in make check"
+
+
+def test_readme_uses_mermaid_and_no_shims():
+    readme = read(REPO_ROOT / "README.md")
+    assert "flowchart TD" in readme, "README.md must use a Mermaid flowchart TD diagram"
+    assert "shims" not in readme, "README.md must not reference shims"
+    assert "~/.local/share/dev-env/bin/" not in readme, "README.md must not reference ~/.local/share/dev-env/bin/"
+    assert "NOT cold-start prerequisites" not in readme, "README.md must not include old cold-start callout"
+    assert "for app dev" not in readme, "README.md must not include 'for app dev'"
 
 
 def test_package_variants_structure_and_invariants(group_vars):
@@ -460,7 +481,10 @@ def test_makefile_bootstrap_uses_only_curl_and_installs_curl_via_brew_or_apt():
     makefile = read(REPO_ROOT / "Makefile")
     assert "wget" not in makefile, "wget should not appear in Makefile"
     assert "urllib.request" not in makefile, "urllib.request should not appear in Makefile"
+    assert "apt-get" not in makefile, "apt-get should not appear in Makefile"
     bootstrap_target = makefile.split("bootstrap:")[1].split("configure:")[0]
+    assert "Error: Homebrew (brew) is required on macOS." in bootstrap_target
+    assert "Error: apt is required on Linux." in bootstrap_target
     assert "curl -fsSL" in bootstrap_target, "curl -fsSL must be used to download Miniforge in bootstrap"
     assert "install curl" in bootstrap_target, "bootstrap must install curl via brew if missing"
     assert "apt install -y curl" in bootstrap_target, "bootstrap must install curl via apt if missing"
