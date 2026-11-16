@@ -7,6 +7,9 @@ environment. Violating these constraints triggers automated alerts, sandbox term
 
 ## 1. Git Flow & Branch Constraints
 
+- **Repository Layout & Worktrees:** The recommended repository architecture is a bare `.git` directory (`dev-env/.git`)
+  with checkouts located in worktrees (`dev-env/main`, `dev-env/<worktree>`), allowing concurrent branch work without
+  interfering with active checkouts.
 - **Prefix-Based Isolation:** Every active task must run inside its own isolated branch prefix:
   - **Root Intents:** `I-{timestamp}-{slug}/_`. Only human operators can approve merges to canonical branches.
   - **Plan Variants:** `I-{timestamp}-{slug}/P-{timestamp}-{agent}-{model}/_`. Created off of the intent branch.
@@ -23,11 +26,11 @@ environment. Violating these constraints triggers automated alerts, sandbox term
 
 All execution and validation activities must run inside an isolated sandbox determined by predicted entropy and trust:
 
-1. **Process Sandbox:** (Low entropy $< 10$, high trust). Local Python sub-process with filesystem containment and
+1. **Process Sandbox:** (Low entropy `< 10`, high trust). Local Python sub-process with filesystem containment and
    disabled network access.
-2. **Container Sandbox (Docker):** (Medium entropy $10 - 30$, standard trust). Docker container with resource
+2. **Container Sandbox (Docker):** (Medium entropy `10 - 30`, standard trust). Docker container with resource
    constraints and network isolation.
-3. **VM Sandbox:** (High entropy $> 30$, low/baseline trust). Highly secure VM with kernel-level isolation and rollback
+3. **VM Sandbox:** (High entropy `> 30`, low/baseline trust). Highly secure VM with kernel-level isolation and rollback
    support.
 
 ---
@@ -36,6 +39,9 @@ All execution and validation activities must run inside an isolated sandbox dete
 
 Because this repository owns the developer environment, execution runs must respect these limits:
 
+- **GNU Stow Dotfile Management:** GNU Stow (`stow`) is an explicit prerequisite for managing dotfiles. Dotfiles are
+  structured into per-tool Stow packages (`bash`, `conda`, `fish`, `nvim`, `tmux`, `zsh`) under `dotfiles/<pkg>/` and
+  symlinked via `stow --no-folding --restow`. Directory folding is strictly prohibited.
 - **Converge Through the Manifest:** Add a package by editing `ansible/group_vars/all.yml` plus the alias tables --
   never by running `brew install` / `apt-get install` inside an execution step. Undeclared installs are invisible to
   every other machine.

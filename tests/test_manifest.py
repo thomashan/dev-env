@@ -131,7 +131,7 @@ def test_no_single_source_of_truth_brewfile(repo_root):
 
 
 def test_dotfiles_contain_no_machine_local_fish_state():
-    fish_dir = REPO_ROOT / "dotfiles" / ".config" / "fish"
+    fish_dir = REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish"
     present = {p.name for p in fish_dir.rglob("*")}
     for name in MACHINE_LOCAL_FISH:
         assert name not in present, f"{name} is generated or machine-local and must not be committed"
@@ -154,20 +154,20 @@ def test_dotfiles_hardcode_no_per_user_paths():
         stray = re.findall(r"(?<![\w.])/home/(?!linuxbrew)[\w./-]+", code)
         assert not stray, f"{rel} hardcodes a Linux home path: {stray}"
         if "/opt/homebrew" in code or "/usr/local/bin/brew" in code:
-            assert "case Darwin" in code, f"{rel} uses a macOS path without an OS switch"
+            assert "case Darwin" in code or "Darwin)" in code, f"{rel} uses a macOS path without an OS switch"
 
 
 def test_conda_path_parity_between_ansible_and_fish(group_vars):
     """The whole point of installing Miniforge to ~ on both OSes."""
     conda_dir = group_vars["devenv_conda_dir"]
     assert conda_dir == "{{ devenv_home }}/miniforge3"
-    fish_cfg = read(REPO_ROOT / "dotfiles" / ".config" / "fish" / "config.fish")
+    fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
     assert "$HOME/miniforge3" in fish_cfg, "config.fish must probe the same conda path Ansible installs"
 
 
 def test_node_pin_is_declared_exactly_once_and_well_formed(group_vars):
     """Ansible parses this pin out of the fish config; two sources would drift."""
-    pin_file = read(REPO_ROOT / "dotfiles" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    pin_file = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
     pins = re.findall(r"^set -g devenv_node_default_version (\S+)$", pin_file, flags=re.MULTILINE)
     assert len(pins) == 1, f"expected exactly one node pin, found {pins}"
     assert VERSION_RE.match(pins[0]), f"node pin is not an X.Y.Z version: {pins[0]}"
@@ -176,7 +176,7 @@ def test_node_pin_is_declared_exactly_once_and_well_formed(group_vars):
 
 def test_node_bin_is_first_on_path():
     """This host had three node binaries; nvm must win over ~/.local/bin."""
-    fish_cfg = read(REPO_ROOT / "dotfiles" / ".config" / "fish" / "config.fish")
+    fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
     nvm = fish_cfg.index("nvm/current/bin")
     local = fish_cfg.index('$HOME/.local/bin')
     assert nvm < local, "nvm's node must be prepended before ~/.local/bin"
@@ -276,15 +276,93 @@ def test_makefile_recipes_are_tab_indented():
 
 
 def test_nvim_lockfile_covers_every_declared_plugin():
-    """init.lua installs via vim.pack; an unlocked plugin is not reproducible."""
-    init = read(REPO_ROOT / "dotfiles" / ".config" / "nvim" / "init.lua")
-    lock = yaml.safe_load(read(REPO_ROOT / "dotfiles" / ".config" / "nvim" / "nvim-pack-lock.json"))
-    declared = set(re.findall(r"'(https://github\.com/[^']+)'", init))
+    """init.lua and loaded plugins install via vim.pack; an unlocked plugin is not reproducible."""
+    nvim_dir = REPO_ROOT / "dotfiles" / "nvim" / ".config" / "nvim"
+    init_file = nvim_dir / "init.lua"
+    lock = yaml.safe_load(read(nvim_dir / "nvim-pack-lock.json"))
+
+    init_lines = [line for line in read(init_file).splitlines() if not line.lstrip().startswith("--")]
+    active_requires = {
+        m.group(1)
+        for line in init_lines
+        if (m := re.search(r"require\s*['\"]([^'\"]+)['\"]", line))
+    }
+
+    lua_files = [init_file]
+    for path in (nvim_dir / "lua").rglob("*.lua"):
+        rel = path.relative_to(nvim_dir / "lua").with_suffix("")
+        mod = ".".join(rel.parts)
+        if mod in active_requires or mod.startswith("custom.plugins"):
+            lua_files.append(path)
+
+    declared = set()
+    for path in lua_files:
+        lines = [line for line in read(path).splitlines() if not line.lstrip().startswith("--")]
+        text = "\n".join(lines)
+        for match in re.findall(r"gh\s*['\"]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)['\"]", text):
+            declared.add(f"https://github.com/{match}")
+        for match in re.findall(r"'(https://github\.com/[^']+)'", text):
+            declared.add(match)
+
     locked = {entry["src"] for entry in lock["plugins"].values()}
-    assert declared, "no vim.pack.add() sources found in init.lua"
+    assert declared, "no vim.pack.add() sources found in init.lua and loaded plugins"
     assert declared <= locked, f"plugins missing from nvim-pack-lock.json: {sorted(declared - locked)}"
     for name, entry in lock["plugins"].items():
         assert re.fullmatch(r"[0-9a-f]{40}", entry["rev"]), f"{name} is not pinned to a commit"
+
+
+def test_stow_is_declared_in_core_packages(group_vars):
+    assert "stow" in group_vars["devenv_packages_core"], "stow must be in devenv_packages_core"
+
+
+def test_makefile_check_probes_stow():
+    makefile = read(REPO_ROOT / "Makefile")
+    assert 'printf "%-26s " "stow"' in makefile or "command -v stow" in makefile, (
+        "Makefile check target must probe stow"
+    )
+
+
+def test_stow_packages_match_dotfiles_subdirectories(group_vars):
+    dotfiles_dir = REPO_ROOT / "dotfiles"
+    pkg_dirs = {p.name for p in dotfiles_dir.iterdir() if p.is_dir()}
+    stow_pkgs = set(group_vars.get("devenv_stow_packages", []))
+    assert stow_pkgs == pkg_dirs, (
+        f"devenv_stow_packages {sorted(stow_pkgs)} does not match dotfiles/ subdirs {sorted(pkg_dirs)}"
+    )
+    assert stow_pkgs == {"bash", "conda", "fish", "nvim", "tmux", "zsh"}
+
+
+def test_all_tracked_dotfiles_belong_to_stow_packages_and_are_linked(group_vars):
+    stow_pkgs = set(group_vars.get("devenv_stow_packages", []))
+    manifest_srcs = {entry["src"] for entry in group_vars.get("devenv_links", [])}
+    dotfiles_dir = REPO_ROOT / "dotfiles"
+    for path in dotfiles_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(dotfiles_dir)
+        repo_rel = str(path.relative_to(REPO_ROOT))
+        assert len(rel.parts) > 1, f"{repo_rel} is directly under dotfiles/ outside a stow package"
+        pkg = rel.parts[0]
+        assert pkg in stow_pkgs, f"{repo_rel} package '{pkg}' not in devenv_stow_packages"
+        assert repo_rel in manifest_srcs, f"{repo_rel} is not declared in devenv_links"
+
+
+def test_readme_manifest_coverage(group_vars):
+    readme = read(REPO_ROOT / "README.md")
+    for pkg in group_vars["devenv_packages_core"]:
+        assert pkg in readme, f"README.md missing core package: {pkg}"
+    for tool in group_vars["devenv_uv_tools"]:
+        assert tool in readme, f"README.md missing uv tool: {tool}"
+    fish_plugins_text = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "fish_plugins")
+    for line in fish_plugins_text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("@")[0]
+        assert name in readme or line in readme, f"README.md missing fish plugin: {line}"
+    lock = yaml.safe_load(read(REPO_ROOT / "dotfiles" / "nvim" / ".config" / "nvim" / "nvim-pack-lock.json"))
+    for plugin_name, entry in lock["plugins"].items():
+        assert plugin_name in readme or entry["src"] in readme, f"README.md missing Neovim plugin: {plugin_name}"
 
 
 def test_tmux_config_uses_the_xdg_path(link_manifest):

@@ -95,7 +95,9 @@ check:
 		printf "%-26s " $$tool; \
 		if command -v $$tool >/dev/null 2>&1; then echo "ok ($$(command -v $$tool))"; else echo "MISSING"; err=$$((err+1)); fi; \
 	done; \
-printf "%-26s " "uv"; \
+	printf "%-26s " "stow"; \
+	if command -v stow >/dev/null 2>&1; then echo "ok ($$(command -v stow))"; else echo "will be installed by bootstrap (packages role)"; warn=$$((warn+1)); fi; \
+	printf "%-26s " "uv"; \
 	if [ -x "$(UV)" ]; then uvver=$$( '$(UV)' --version 2>/dev/null | head -1 ); echo "ok ($$uvver)"; else echo "will be installed by bootstrap"; warn=$$((warn+1)); fi; \
 	printf "%-26s " "ansible-core"; \
 	if [ -x "$(PB)" ]; then echo "ok"; else echo "will be installed by bootstrap"; warn=$$((warn+1)); fi; \
@@ -143,6 +145,7 @@ check-mode:
 	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --check --diff $(ANSIBLE_EXTRA)
 
 dotfiles:
+	@command -v stow >/dev/null 2>&1 || { echo "GNU Stow is required for dotfiles management. Run 'make converge' or install stow."; exit 1; }
 	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --tags dotfiles --diff $(ANSIBLE_EXTRA)
 
 nvim-sync:
@@ -161,6 +164,7 @@ login-shell:
 	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" -e devenv_set_login_shell=true $(ANSIBLE_EXTRA)
 
 unlink:
+	@command -v stow >/dev/null 2>&1 || { echo "GNU Stow is required for unlink. Please install stow first."; exit 1; }
 	@test "$(CONFIRM)" = "yes" || { echo "refusing to touch ~/.config without CONFIRM=yes"; exit 1; }
 	@$(ANSIBLE_ENV) "$(PB)" "$(SELF_DIR)/ansible/playbooks/unlink.yml" --diff $(ANSIBLE_EXTRA)
 

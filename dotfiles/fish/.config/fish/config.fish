@@ -1,6 +1,6 @@
 # ============================================================================
 # dev-env fish configuration  --  this file is the source of truth.
-# Managed by: dotfiles/.config/fish/config.fish (symlinked by ansible).
+# Managed by: dotfiles/fish/.config/fish/config.fish (symlinked via GNU Stow).
 #
 # Multi-OS rules: never hardcode /Users/... or /opt/homebrew/... absolute
 # paths. Resolve everything from $HOME, $XDG_* or the OS detection in

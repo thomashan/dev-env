@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-13993098",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-16T02:18:49.830036+00:00",
+  "updated_ts": "2026-11-16T02:18:49.830036+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1794795067-e933548a",
+      "ACT-REV-1794795066-88264933"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794792028-stow/P-1794792046-6a25eec5-antigravity-agent-gemini-3.8-flash-medium/E-1794792504-cd8c00d3-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 2 reviewer 1 failed",
+    "symptoms": [
+      "the reviewer wrote no report (output: root agent idle; waiting for 1 background task(s) to finish\nI have initiated the Ansible galaxy collection installation and ansible-lint check and will wait for it to finish.\nI have initiated the check and will wait for the task notification.)"
+    ]
+  }
+}

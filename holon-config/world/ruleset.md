@@ -25,8 +25,13 @@ round.
 - **Multi-OS Rule:** Every config and task must work on macOS (Darwin) and Linux. Never hardcode `/Users/...`,
   `/home/...` or `/opt/homebrew/...`; resolve paths from facts, `$HOME`, or `$XDG_*`. OS-specific differences go in
   `ansible/vars/os_<System>.yml`, not inline in role tasks.
-- **Project Layout:** `ansible/` (control plane), `dotfiles/` (config source of truth), `holon-config/` (world model),
-  `holon-knowledge/` (ledger), `intents/` (drafts, gitignored).
+- **Project Layout & Stow Packaging:** `ansible/` (control plane), `dotfiles/` (modular per-tool GNU Stow packages:
+  `bash`, `conda`, `fish`, `nvim`, `tmux`, `zsh`), `holon-config/` (world model), `holon-knowledge/` (ledger),
+  `intents/` (drafts, gitignored). Zero loose files live directly under `dotfiles/` outside declared Stow package
+  directories.
+- **Local Override Hooks:** Tool configurations provide explicit hooks for machine-local configurations:
+  `.bashrc.local`, `.bash_profile.local`, `.zshrc.local`, and fish `local/` / `conf.d/*.fish` to ensure personal
+  overrides do not pollute tracked dotfiles.
 
 ---
 

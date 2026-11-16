@@ -6,7 +6,7 @@
 
 - name: Read the node version pin from the dotfiles (single source of truth)
   ansible.builtin.slurp:
-    src: "{{ devenv_repo_root }}/dotfiles/.config/fish/conf.d/00-devenv.fish"
+    src: "{{ devenv_repo_root }}/dotfiles/fish/.config/fish/conf.d/00-devenv.fish"
   register: devenv_fish_pins
 
 # Ansible's regex_search returns the whole match unless a group is requested,
@@ -23,7 +23,7 @@
   ansible.builtin.assert:
     that:
       - devenv_node_version | length > 0
-    fail_msg: "Could not parse devenv_node_default_version from dotfiles/.config/fish/conf.d/00-devenv.fish"
+    fail_msg: "Could not parse devenv_node_default_version from dotfiles/fish/.config/fish/conf.d/00-devenv.fish"
     quiet: true
 
 - name: Ensure the fisher path exists (plugin payloads stay out of the repo)
@@ -38,7 +38,7 @@
     dest: "{{ devenv_home }}/.config/fish/local/functions/fisher.fish"
     mode: "0644"
 
-- name: Sync fisher plugins from dotfiles/.config/fish/fish_plugins
+- name: Sync fisher plugins from dotfiles/fish/.config/fish/fish_plugins
   ansible.builtin.command:
     cmd: fish -c "fisher update"
   register: devenv_fisher
@@ -73,6 +73,6 @@
       {{ devenv_node_which.stdout_lines | join(' | ') }}
       Likely cause: another PATH entry (brew node, ~/.local/bin/node from an
       agent runtime) precedes $XDG_DATA_HOME/nvm/current/bin. Fix the PATH
-      order in dotfiles/.config/fish/config.fish or remove the competitor with
+      order in dotfiles/fish/.config/fish/config.fish or remove the competitor with
       devenv_remove_unmanaged: true.
     quiet: true

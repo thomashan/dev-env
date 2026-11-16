@@ -1,6 +1,6 @@
 ---
-# Reversibility: remove ONLY the symlinks listed in devenv_links. Real files
-# are never deleted, and backups created by the dotfiles role are left alone.
+# Reversibility: remove ONLY the symlinks listed in devenv_links using GNU Stow.
+# Real files are never deleted, and backups created by the dotfiles role are left alone.
 - name: Unlink managed dotfiles
   hosts: control
   gather_facts: true
@@ -10,6 +10,22 @@
     - name: Load the manifest
       ansible.builtin.include_vars:
         file: "{{ devenv_repo_root }}/ansible/group_vars/all.yml"
+
+    - name: Locate GNU Stow binary
+      ansible.builtin.command:
+        cmd: which stow
+      register: devenv_stow_bin
+      changed_when: false
+      failed_when: false
+
+    - name: Assert GNU Stow is available
+      ansible.builtin.assert:
+        that:
+          - devenv_stow_bin.rc == 0
+        fail_msg: >-
+          GNU Stow was not found on PATH. stow is required for unlinking managed dotfiles.
+          Please install stow first.
+        quiet: true
 
     - name: Find which managed paths are symlinks
       ansible.builtin.stat:
@@ -22,7 +38,11 @@
     - name: Refuse to remove anything that is not our symlink
       ansible.builtin.assert:
         that:
-          - (item.stat.lnk_source | default('')) startswith devenv_repo_root
+          - item.stat.islnk | default(false)
+          - >-
+            ((item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
+              else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath)
+            startswith devenv_repo_root
         fail_msg: "{{ item.item.dest }} exists but is not a symlink into {{ devenv_repo_root }}; refusing to delete."
         quiet: true
       loop: "{{ devenv_unlink_stat.results }}"
@@ -30,14 +50,12 @@
         label: "{{ item.item.dest }}"
       when: item.stat.exists | default(false)
 
-    - name: Remove the symlinks
-      ansible.builtin.file:
-        path: "{{ item.item.dest }}"
-        state: absent
-      loop: "{{ devenv_unlink_stat.results }}"
-      loop_control:
-        label: "{{ item.item.dest }}"
-      when:
-        - item.stat.exists | default(false)
-        - item.stat.islnk | default(false)
-        - (item.stat.lnk_source | default('')) startswith devenv_repo_root
+    - name: Invoke stow to delete managed packages
+      ansible.builtin.command:
+        cmd: >-
+          stow --delete -v
+          -d "{{ devenv_repo_root }}/dotfiles"
+          -t "{{ devenv_home }}"
+          {{ devenv_stow_packages | join(' ') }}
+      register: devenv_stow_unlink
+      changed_when: "'UNLINK:' in devenv_stow_unlink.stderr"
