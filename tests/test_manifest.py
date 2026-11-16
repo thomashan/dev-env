@@ -400,12 +400,14 @@ def test_makefile_no_shims_and_direct_conda_bins():
 
 def test_makefile_check_probes_prerequisites_strictly():
     makefile = read(REPO_ROOT / "Makefile")
+    assert "command -v conda" in makefile, "Makefile must probe conda via command -v conda"
+    assert "conda info --base" in makefile, "Makefile must probe conda base via conda info --base"
     check_target = makefile.split("check:")[1].split("bootstrap:")[0]
     expected_probes = [
         "GNU Make",
         "OS",
+        "brew",
         "apt (Linux backend)",
-        "brew (macOS backend)",
         "conda",
         "ansible-core",
         "community.general",
@@ -417,6 +419,21 @@ def test_makefile_check_probes_prerequisites_strictly():
     assert "err=$$((err+1))" in check_target
     for forbidden in ["uv", "stow", "git", "curl"]:
         assert f'"{forbidden}"' not in check_target, f"{forbidden} should not be probed in make check"
+
+
+def test_readme_getting_started_and_categories():
+    readme = read(REPO_ROOT / "README.md")
+    assert "## Getting Started" in readme, "README.md must have a '## Getting Started' section"
+    assert "make install" in readme, "README.md must document 'make install'"
+    assert "`nvm`/node" not in readme, "README.md must not contain broken `nvm`/node formatting"
+    assert re.search(r"\|\s*Logical Package\s*\|\s*Category\s*\|", readme), (
+        "README.md table must contain Category column"
+    )
+    assert "**Python — Runtime & Environment Manager**" in readme
+    assert "**Python — Package & Project Manager**" in readme
+    assert "**Python — Linter & Formatter**" in readme
+    assert "**Multi-Language — Git Hooks**" in readme
+    assert "**JavaScript / TypeScript — Node.js Runtime & Version Manager**" in readme
 
 
 def test_readme_uses_mermaid_and_no_shims():
@@ -477,17 +494,23 @@ def test_gitignore_protects_generated_fish_state(repo_root):
         assert token in gitignore, f".gitignore no longer ignores {token}"
 
 
-def test_makefile_bootstrap_uses_only_curl_and_installs_curl_via_brew_or_apt():
+def test_makefile_bootstrap_installs_conda_via_brew():
     makefile = read(REPO_ROOT / "Makefile")
     assert "wget" not in makefile, "wget should not appear in Makefile"
     assert "urllib.request" not in makefile, "urllib.request should not appear in Makefile"
     assert "apt-get" not in makefile, "apt-get should not appear in Makefile"
     bootstrap_target = makefile.split("bootstrap:")[1].split("configure:")[0]
-    assert "Error: Homebrew (brew) is required on macOS." in bootstrap_target
+    assert "Error: Homebrew (brew) is required." in bootstrap_target
     assert "Error: apt is required on Linux." in bootstrap_target
-    assert "curl -fsSL" in bootstrap_target, "curl -fsSL must be used to download Miniforge in bootstrap"
-    assert "install curl" in bootstrap_target, "bootstrap must install curl via brew if missing"
-    assert "apt install -y curl" in bootstrap_target, "bootstrap must install curl via apt if missing"
+    assert "install --cask miniforge" in bootstrap_target
+    assert "install micromamba" in bootstrap_target
+    assert "curl" not in bootstrap_target, "curl should not appear in bootstrap recipe"
+    assert "Miniforge3-" not in bootstrap_target, "Miniforge3- release assets should not be fetched directly in bootstrap"
+
+
+test_makefile_bootstrap_uses_only_curl_and_installs_curl_via_brew_or_apt = (
+    test_makefile_bootstrap_installs_conda_via_brew
+)
 
 
 def test_no_apt_get_in_repo():

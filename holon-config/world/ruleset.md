@@ -10,18 +10,19 @@ rules for this repository. All planning and execution agents must consult and ob
 This repository **is** the development environment. The machine is a build artifact of the repo, never the other way
 round.
 
-- **Installation Contract:** Pure `make -> conda -> ansible` bootstrap toolchain. The system package manager — `brew`
-  (macOS) or `apt` (Linux) — is the system prerequisite; `GNU Make >= 3.81` is installed via `brew install make` (or
-  `xcode-select --install`) on macOS or `sudo apt install -y make` on Linux if absent. `git`, `curl`, and other packages
-  are managed by Ansible's `packages` role. `uv` is installed as part of standard Conda tooling (`devenv_conda_tools`).
-  See `README.md`.
+- **Installation Contract:** Pure `make -> conda -> ansible` bootstrap toolchain. `brew` is required on both macOS and
+  Linux for Conda bootstrap (and `apt` for system packages on Debian/Ubuntu Linux); `GNU Make >= 3.81` and `git` are
+  installed via `brew install make git` (or `xcode-select --install`) on macOS or
+  `sudo apt update && sudo apt install -y make git` on Linux if absent. Existing Conda environments are dynamically
+  detected via `command -v conda` and `conda info --base`, or bootstrapped via `brew` (`miniforge` cask on macOS,
+  `micromamba` on Linux). Ansible converges through a single backend per OS (`brew` on macOS, `apt` on Linux). `uv` is
+  installed as part of standard Conda tooling (`devenv_conda_tools`). See `README.md`.
 - **No Shell Scripts:** No `.sh` files may be added to this repository. Orchestration belongs in `Makefile` recipes
-  (short, reviewable) and Ansible tasks. Upstream installers fetched by `ansible.builtin.get_url` into
-  `~/.cache/dev-env/` and run under a `creates:` guard are the only permitted exception.
+  (short, reviewable) and Ansible tasks.
 - **GNU Make Compatibility:** The `Makefile` must stay compatible with GNU Make 3.81, which is what `/usr/bin/make` is
   on macOS. No `.ONESHELL`, `$(file ...)`, `!=` or `.RECIPEPREFIX`.
-- **Python Runtime:** Strict target version `==3.13.*` for Ansible tooling and Python packages, installed and managed
-  via Miniforge Conda into `~/miniforge3` (`python=3.13`, `ansible-core`, `ansible-lint`, `pyyaml`).
+- **Python Runtime:** Strict target version `==3.13.*` for Ansible tooling and Python packages, detected or provisioned
+  via Conda (`python=3.13`, `ansible-core`, `ansible-lint`, `pyyaml`).
 - **Host Interactive Wizard:** `make configure` runs `scripts/devenv_wizard.py` (Python 3.13 standard library) to
   collect host settings, resolve dotfile conflicts, and persist user decisions to `~/.config/dev-env/choices.yml`.
 - **Package Management:** System tooling is declared in `ansible/group_vars/all.yml` by logical name only, with
