@@ -1,6 +1,23 @@
 ---
-# Symlink the repo into $HOME. Only paths listed in devenv_links are touched,
-# so ~/.config itself is never linked wholesale and other apps' config is safe.
+# Symlink the repo into $HOME using GNU Stow (--no-folding). Only paths listed
+# in devenv_links are touched, so ~/.config itself is never linked wholesale
+# and other apps' config is safe.
+
+- name: Locate GNU Stow binary
+  ansible.builtin.command:
+    cmd: command -v stow
+  register: devenv_stow_bin
+  changed_when: false
+  failed_when: false
+
+- name: Assert GNU Stow is available
+  ansible.builtin.assert:
+    that:
+      - devenv_stow_bin.rc == 0
+    fail_msg: >-
+      GNU Stow was not found on PATH. stow is a hard prerequisite for dotfiles
+      management. Please install stow via your package manager or run the packages role.
+    quiet: true
 
 - name: Timestamp for this run's backups
   ansible.builtin.set_fact:
@@ -48,6 +65,15 @@
   loop_control:
     label: "{{ item.dest }}"
 
+- name: Ensure backup directory exists if unmanaged files are found
+  ansible.builtin.file:
+    path: "{{ devenv_backup_dir }}"
+    state: directory
+    mode: "0700"
+  when:
+    - devenv_backup_dotfiles | bool
+    - devenv_dest_stat.results | selectattr('stat.exists') | rejectattr('stat.islnk') | list | length > 0
+
 - name: Move an unmanaged real file out of the way before linking
   ansible.builtin.command:
     cmd: /bin/mv "{{ item.item.dest }}" "{{ devenv_backup_dir }}/{{ item.item.dest | regex_replace('^/', '') | regex_replace('/', '__') }}"
@@ -68,24 +94,30 @@
       real files/dirs found where links belong:
       {{ devenv_dest_stat.results | selectattr('stat.exists') | rejectattr('stat.islnk') | map(attribute='item.dest') | join(', ') | default('none', true) }}
 
-- name: Create parent directories again (a moved directory took them with it)
+- name: Remove stale symlinks not pointing to expected Stow package source
   ansible.builtin.file:
-    path: "{{ item.dest | dirname }}"
-    state: directory
-    mode: "0755"
-  loop: "{{ devenv_links }}"
+    path: "{{ item.item.dest }}"
+    state: absent
+  loop: "{{ devenv_dest_stat.results }}"
   loop_control:
-    label: "{{ item.dest | dirname }}"
+    label: "{{ item.item.dest }}"
+  when:
+    - item.stat.exists | default(false)
+    - item.stat.islnk | default(false)
+    - >-
+      (item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
+       else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath != (devenv_repo_root ~ '/' ~ item.item.src) | realpath
 
-- name: Link repo files into the home directory
-  ansible.builtin.file:
-    src: "{{ devenv_repo_root }}/{{ item.src }}"
-    dest: "{{ item.dest }}"
-    state: link
-    force: true
-  loop: "{{ devenv_links }}"
-  loop_control:
-    label: "{{ item.dest }}"
+- name: Execute GNU Stow to link per-tool dotfiles packages
+  ansible.builtin.command:
+    cmd: >-
+      stow --no-folding --restow -v
+      {{ '-n' if ansible_check_mode else '' }}
+      -d "{{ devenv_repo_root }}/dotfiles"
+      -t "{{ devenv_home }}"
+      {{ devenv_stow_packages | join(' ') }}
+  register: devenv_stow_result
+  changed_when: "'LINK:' in devenv_stow_result.stderr or 'UNLINK:' in devenv_stow_result.stderr"
 
 # Post-conditions are only meaningful after links were actually created; in a
 # dry run nothing was linked, so verifying would report false failures.
@@ -102,7 +134,10 @@
   ansible.builtin.assert:
     that:
       - item.stat.islnk | default(false)
-      - item.stat.lnk_source | default('') | regex_escape | regex_search((devenv_repo_root | regex_escape))
+      - >-
+        ((item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
+          else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath)
+        startswith devenv_repo_root
     fail_msg: "{{ item.item.dest }} is not a symlink into {{ devenv_repo_root }}"
     quiet: true
   loop: "{{ devenv_link_check.results | default([], true) }}"

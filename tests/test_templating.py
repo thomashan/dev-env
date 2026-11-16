@@ -137,7 +137,7 @@ def test_backend_guard_rejects_the_rest(templar, group_vars, backend):
 
 def test_node_pin_is_parsed_from_the_real_fish_config(templar):
     """Regression: regex_search returns the whole match, so this must not use it."""
-    text = read(REPO_ROOT / "dotfiles" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    text = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
     rendered = templar(node_pin_expr(), {"devenv_fish_pins": {"content": base64.b64encode(text.encode())}})
     expected = re.search(r"^set -g devenv_node_default_version (\S+)$", text, re.MULTILINE).group(1)
     assert rendered == expected

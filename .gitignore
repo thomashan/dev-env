@@ -19,12 +19,12 @@ intents/*.yaml
 
 # --- fish runtime state that must never be committed ---
 # Plugin payloads land in $fisher_path (local/); fish_variables is machine-local.
-dotfiles/.config/fish/local/
-dotfiles/.config/fish/fish_variables
-dotfiles/.config/fish/completions/
-dotfiles/.config/fish/functions/
-dotfiles/.config/fish/conf.d/sdk.fish
-dotfiles/.config/fish/conf.d/nvm.fish
+dotfiles/fish/.config/fish/local/
+dotfiles/fish/.config/fish/fish_variables
+dotfiles/fish/.config/fish/completions/
+dotfiles/fish/.config/fish/functions/
+dotfiles/fish/.config/fish/conf.d/sdk.fish
+dotfiles/fish/.config/fish/conf.d/nvm.fish
 
 # --- downloaded installers ---
 .cache/

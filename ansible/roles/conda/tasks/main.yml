@@ -1,6 +1,6 @@
 ---
 # Miniforge, not Anaconda, and installed to the SAME path on every OS so
-# dotfiles/.config/fish/config.fish needs no OS branch for conda.
+# dotfiles/fish/.config/fish/config.fish needs no OS branch for conda.
 # community.general has no conda/miniforge module (verified upstream), so the
 # upstream installer is fetched with get_url and run under a `creates:` guard.
 

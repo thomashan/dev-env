@@ -52,7 +52,7 @@
       - (devenv_nvim_version.stdout_lines[0].regex_replace('^NVIM v(\\d+)\\.(\\d+).*$', '\\1') | int) > 0
       - (devenv_nvim_version.stdout_lines[0].regex_replace('^NVIM v\\d+\\.(\\d+).*$', '\\1') | int) >= 12
     fail_msg: >-
-      {{ devenv_nvim_version.stdout_lines[0] }} is too old; dotfiles/.config/nvim/init.lua
+      {{ devenv_nvim_version.stdout_lines[0] }} is too old; dotfiles/nvim/.config/nvim/init.lua
       uses vim.pack() + nvim-pack-lock.json (0.12+). Set devenv_neovim_source: github for
       this platform.
     quiet: true
