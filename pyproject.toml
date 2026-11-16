@@ -19,6 +19,15 @@ test = [
   "ruff>=0.8",
 ]
 
+[dependency-groups]
+dev = [
+  "taskipy>=1.14.1",
+]
+
+[tool.taskipy.tasks]
+lint = "ruff check ."
+test = "pytest -m 'not network'"
+
 [tool.uv]
 package = false
 
