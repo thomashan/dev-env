@@ -428,6 +428,52 @@ def test_readme_uses_mermaid_and_no_shims():
     assert "for app dev" not in readme, "README.md must not include 'for app dev'"
 
 
+def test_readme_getting_started_and_entrypoint():
+    """Verify that README.md has a linear Getting Started section anchored on make install."""
+    readme = read(REPO_ROOT / "README.md")
+    assert "## Getting Started" in readme, "README.md must have a '## Getting Started' section"
+    assert "make install" in readme, "README.md must document make install as the entry point"
+    assert "make check" in readme, "README.md must mention make check stage"
+    assert "make bootstrap" in readme, "README.md must mention make bootstrap stage"
+    assert "make configure" in readme, "README.md must mention make configure stage"
+    assert "make converge" in readme, "README.md must mention make converge stage"
+    assert "`nvm`/node" not in readme, "README.md must not contain the broken '`nvm`/node' string"
+
+
+def test_readme_tool_category_attributions(group_vars):
+    """Verify that README.md documents categories and programming languages across tools."""
+    readme = read(REPO_ROOT / "README.md")
+    # Verify core CLI table header contains Category column
+    assert re.search(
+        r"\|\s*Logical Package\s*\|\s*Category\s*\|\s*macOS \(`brew`\) Formula\s*\|\s*Linux \(`apt`\) Package\s*\|\s*Stow Status\s*\|\s*Description\s*\|",
+        readme,
+    ), "README.md core table must include Category column"
+
+    # Verify key categories and language attributions
+    required_attributions = [
+        "Terminal / Shell",
+        "Editor / IDE",
+        "Python (Runtime & Environment Manager)",
+        "Python (Package & Project Manager)",
+        "Python (Linter & Formatter)",
+        "Multi-Language (Git Hooks)",
+        "JavaScript / TypeScript (Node.js Runtime & Version Manager)",
+        "Java / JVM",
+        "Containers / Virtualization",
+    ]
+    for attr in required_attributions:
+        assert attr in readme, f"README.md missing category/language attribution: {attr}"
+
+    # Verify every core package has a corresponding row with category in the table
+    for pkg in group_vars["devenv_packages_core"]:
+        pattern = rf"\|\s*`{re.escape(pkg)}`\s*\|\s*`([^`]+)`\s*\|"
+        match = re.search(pattern, readme)
+        assert match is not None, f"README.md core packages table missing category entry for package `{pkg}`"
+
+
+test_readme_category_and_language_attributions = test_readme_tool_category_attributions
+
+
 def test_package_variants_structure_and_invariants(group_vars):
     variants_map = group_vars.get("devenv_package_variants")
     assert variants_map is not None, "devenv_package_variants must be declared in group_vars/all.yml"
