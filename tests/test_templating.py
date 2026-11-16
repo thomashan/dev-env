@@ -53,10 +53,6 @@ def node_pin_expr() -> str:
     return set_fact_expression("node", "Parse the pin", "devenv_node_version")
 
 
-def conda_installer_expr() -> str:
-    return set_fact_expression("conda", "Pick the Miniforge installer", "devenv_conda_installer")
-
-
 def nvim_asset_expr() -> str:
     return set_fact_expression("neovim", "Compute the release asset name", "devenv_nvim_asset")
 
@@ -154,21 +150,6 @@ def test_node_pin_parse_fails_loudly_when_the_line_moves(templar):
 @pytest.mark.parametrize(
     ("system", "arch", "expected"),
     [
-        ("Darwin", "arm64", "Miniforge3-MacOSX-arm64.sh"),
-        ("Darwin", "aarch64", "Miniforge3-MacOSX-arm64.sh"),
-        ("Darwin", "x86_64", "Miniforge3-MacOSX-x86_64.sh"),
-        ("Linux", "x86_64", "Miniforge3-Linux-x86_64.sh"),
-        ("Linux", "aarch64", "Miniforge3-Linux-aarch64.sh"),
-        ("Linux", "amd64", "Miniforge3-Linux-x86_64.sh"),
-    ],
-)
-def test_conda_installer_matches_platform(templar, system, arch, expected):
-    assert templar(conda_installer_expr(), {"devenv_system": system, "devenv_arch": arch}) == expected
-
-
-@pytest.mark.parametrize(
-    ("system", "arch", "expected"),
-    [
         ("Darwin", "arm64", "nvim-macos-arm64.tar.gz"),
         ("Darwin", "x86_64", "nvim-macos-x86_64.tar.gz"),
         ("Linux", "x86_64", "nvim-linux-x86_64.tar.gz"),
@@ -230,9 +211,11 @@ def test_conda_dir_is_stable_across_platforms(templar, group_vars):
     [("Darwin", "arm64"), ("Darwin", "x86_64"), ("Linux", "x86_64"), ("Linux", "aarch64")],
 )
 @pytest.mark.skipif(os.environ.get("DEVENV_NETWORK_TESTS") != "1", reason="set DEVENV_NETWORK_TESTS=1 (CI sets it)")
-def test_miniforge_installer_names_exist_upstream(templar, system, arch):
+def test_miniforge_installer_names_exist_upstream(group_vars, system, arch):
     """Opt-in network check that the computed asset names are real (run in CI)."""
-    name = templar(conda_installer_expr(), {"devenv_system": system, "devenv_arch": arch})
+    os_name = group_vars["devenv_miniforge_asset_os"][system]
+    arch_name = group_vars["devenv_miniforge_asset_arch"][system][arch]
+    name = f"Miniforge3-{os_name}-{arch_name}.sh"
     url = f"https://github.com/conda-forge/miniforge/releases/latest/download/{name}"
     request = urllib.request.Request(url, method="HEAD")
     with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310 - fixed upstream host

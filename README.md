@@ -2,8 +2,53 @@
 
 Your development environment, owned by this repository.
 
-`fish`, `neovim`, `conda`, `nvm`/node, and the CLI tooling around them are declared here and converged onto the machine.
-The machine is not the source of truth — this repo is.
+`fish` (Terminal / Shell), `neovim` (Editor / IDE), `conda` (Python runtime & package manager), `nvm` (Node.js version
+manager), and the CLI tooling around them are declared here and converged onto the machine. The machine is not the
+source of truth — this repo is.
+
+---
+
+## Getting Started
+
+### 1. Prerequisites
+
+- **Homebrew (`brew`)**: Required on both macOS and Linux for Conda bootstrap (and also serves as the macOS system
+  package manager). If missing, install Homebrew from [brew.sh](https://brew.sh).
+- **`apt`**: Required on Debian/Ubuntu Linux for system packages.
+- **GNU Make & Git**: If absent on the host, install them before starting:
+  - On macOS: `brew install make git` (or `xcode-select --install`).
+  - On Linux: `sudo apt update && sudo apt install -y make git`.
+
+### 2. Clone the Repository
+
+Clone this repository as a bare repository with Git worktrees:
+
+```bash
+git clone --bare <repo-url> dev-env/.git
+git --git-dir=dev-env/.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git --git-dir=dev-env/.git fetch origin
+git --git-dir=dev-env/.git worktree add dev-env/main main
+cd dev-env/main
+```
+
+### 3. Kick Off the Environment (`make install`)
+
+**`make install`** is the single command that kicks off and converges the entire dev-env pipeline:
+
+```bash
+make install
+```
+
+This sequentially executes:
+
+1. `make check`: Verifies system prerequisites (`GNU Make`, `OS`, `brew`, `apt`, `conda`, `Ansible`).
+2. `make bootstrap`: Detects existing Conda or installs it via Homebrew (`miniforge` cask on macOS, `micromamba` on
+   Linux), then provisions Python 3.13, Ansible, and required collections.
+3. `make configure`: Launches the interactive host wizard on fresh checkouts to configure variants and resolve dotfile
+   conflicts.
+4. `make converge`: Executes Ansible playbook convergence (`brew` on macOS, `apt` on Linux).
+
+You can also run any individual stage command on demand.
 
 ---
 
@@ -13,20 +58,20 @@ The environment enforces a pure `make -> conda -> ansible` toolchain hierarchy:
 
 ```mermaid
 flowchart TD
-    A["Prerequisite: System Package Manager<br/>- brew (macOS) or apt (Linux)<br/>- Installs GNU Make (>= 3.81) if absent"] --> B["Step 1: make bootstrap<br/>- Verify brew (macOS) or apt (Linux) is present (fail if missing)<br/>- Install curl via brew or apt if absent<br/>- Fetch Miniforge3 installer using curl -fsSL<br/>- Install Miniforge Conda into ~/miniforge3<br/>- Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml<br/>- Install Ansible collection: community.general"]
+    A["Prerequisite: System Package Manager<br/>- brew (macOS & Linux) and apt (Linux)<br/>- Installs GNU Make (>= 3.81) and git if absent"] --> B["Step 1: make bootstrap<br/>- Detect existing Conda (command -v conda / conda info --base)<br/>- If absent, bootstrap Conda via brew (miniforge cask on macOS, micromamba on Linux)<br/>- Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml<br/>- Install Ansible collection: community.general"]
     B --> C["Step 2: make configure<br/>- Interactive host wizard: scripts/devenv_wizard.py<br/>- Persist user choices to ~/.config/dev-env/choices.yml"]
-    C --> D["Step 3: make converge<br/>- Ansible Playbook Execution (site.yml):<br/>  1. bootstrap<br/>  2. homebrew<br/>  3. packages (git, curl, stow, etc.)<br/>  4. dotfiles<br/>  5. conda (python=3.13 env + uv, ruff, pre-commit)<br/>  6. node<br/>  7. neovim<br/>  8. fish"]
+    C --> D["Step 3: make converge<br/>- Single-backend Ansible Playbook Execution (brew on macOS, apt on Linux):<br/>  1. bootstrap<br/>  2. homebrew<br/>  3. packages (git, curl, stow, etc.)<br/>  4. dotfiles<br/>  5. conda (reuse detected Conda + dev env + uv, ruff, pre-commit)<br/>  6. node<br/>  7. neovim<br/>  8. fish"]
 ```
 
 ### Stage-by-Stage Execution
 
-| Stage                              | Command          | Primary Tool                        | Purpose                                                                                                  | Output / State                                                      |
-| ---------------------------------- | ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Prerequisite**                   | `System Setup`   | `brew` (macOS) or `apt` (Linux)     | System package manager (installs `make`, `curl`, and host packages)                                      | `brew` or `apt` on host                                             |
-| **Stage 0: Prerequisite Probe**    | `make check`     | POSIX shell in `make`               | Read-only check of `GNU Make`, `OS`, `brew`/`apt`, `Conda`, and `Ansible`                                | Status report (never mutates system; fails if `brew`/`apt` missing) |
-| **Stage 1: Ansible Bootstrap**     | `make bootstrap` | `GNU Make` + `brew`/`apt` + `Conda` | Verify `brew`/`apt`, install `curl` if absent, fetch Miniforge Conda, install Ansible and Python tooling | `~/miniforge3`, `~/.local/share/dev-env/collections/`               |
-| **Stage 2: Interactive Wizard**    | `make configure` | Conda Python                        | Interactive host setup and dotfile conflict resolution                                                   | `~/.config/dev-env/choices.yml`                                     |
-| **Stage 3: Whole-System Converge** | `make converge`  | `ansible-playbook`                  | Converge packages, Stow dotfiles, runtimes, and plugins                                                  | Fully converged system                                              |
+| Stage                              | Command          | Primary Tool                         | Purpose                                                                                                     | Output / State                                                         |
+| ---------------------------------- | ---------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Prerequisite**                   | `System Setup`   | `brew` (macOS/Linux) & `apt` (Linux) | System package managers (install `make` and `git` if absent)                                                | `brew` and/or `apt` on host                                            |
+| **Stage 0: Prerequisite Probe**    | `make check`     | POSIX shell in `make`                | Read-only check of `GNU Make`, `OS`, `brew`, `apt`, `conda`, and `Ansible`                                  | Status report (never mutates system; fails if `brew` or `apt` missing) |
+| **Stage 1: Ansible Bootstrap**     | `make bootstrap` | `GNU Make` + `brew` + `Conda`        | Detect existing Conda or bootstrap via `brew`, install Ansible and Python tooling                           | Active Conda environment, `~/.local/share/dev-env/collections/`        |
+| **Stage 2: Interactive Wizard**    | `make configure` | Conda Python                         | Interactive host setup and dotfile conflict resolution                                                      | `~/.config/dev-env/choices.yml`                                        |
+| **Stage 3: Whole-System Converge** | `make converge`  | `ansible-playbook`                   | Single-backend converge of packages (`brew` on macOS, `apt` on Linux), Stow dotfiles, runtimes, and plugins | Fully converged system                                                 |
 
 ---
 
@@ -87,52 +132,52 @@ make docs-fmt       # Format markdown documentation using Prettier
 
 All 22 core packages defined in `ansible/group_vars/all.yml`:
 
-| Logical Package | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                                |
-| --------------- | ---------------------- | --------------------- | ----------------------- | ---------------------------------------------------------- |
-| `aria2`         | `aria2`                | `aria2`               | Binary                  | High-speed multi-protocol download utility                 |
-| `autossh`       | `autossh`              | `autossh`             | Binary                  | Automatically restarts SSH sessions and tunnels            |
-| `curl`          | `curl`                 | `curl`                | Binary                  | Command-line tool for transferring data with URLs          |
-| `delta`         | `delta`                | `git-delta`           | Binary                  | Syntax-highlighting pager for git diffs                    |
-| `fd`            | `fd`                   | `fd-find`             | Binary                  | Fast, user-friendly alternative to `find`                  |
-| `fish`          | `fish`                 | `fish`                | Stow package (`fish`)   | Smart and user-friendly command line shell                 |
-| `fzf`           | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder                  |
-| `gh`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                          |
-| `git`           | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system          |
-| `htop`          | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor              |
-| `iperf3`        | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                         |
-| `jq`            | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor       |
-| `ncdu`          | `ncdu`                 | `ncdu`                | Binary                  | NCurses disk usage analyzer                                |
-| `neovim`        | `neovim`               | `neovim`              | Stow package (`nvim-*`) | Hyperextensible Vim-based text editor                      |
-| `openssh`       | `openssh`              | `openssh-client`      | Binary                  | OpenSSH secure connectivity client suite                   |
-| `ripgrep`       | `ripgrep`              | `ripgrep`             | Binary                  | Line-oriented search tool respecting gitignore             |
-| `rsync`         | `rsync`                | `rsync`               | Binary                  | Fast, versatile file copying and synchronization tool      |
-| `stow`          | `stow`                 | `stow`                | Binary                  | Symlink farm manager for dotfiles packages                 |
-| `tmux`          | `tmux`                 | `tmux`                | Stow package (`tmux`)   | Terminal multiplexer (XDG path `~/.config/tmux/tmux.conf`) |
-| `tree`          | `tree`                 | `tree`                | Binary                  | Recursive directory listing visualizer                     |
-| `unzip`         | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)      |
-| `watch`         | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian)    |
+| Logical Package | Category                  | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                                |
+| --------------- | ------------------------- | ---------------------- | --------------------- | ----------------------- | ---------------------------------------------------------- |
+| `aria2`         | `Networking / Download`   | `aria2`                | `aria2`               | Binary                  | High-speed multi-protocol download utility                 |
+| `autossh`       | `Networking / SSH`        | `autossh`              | `autossh`             | Binary                  | Automatically restarts SSH sessions and tunnels            |
+| `curl`          | `Networking / HTTP`       | `curl`                 | `curl`                | Binary                  | Command-line tool for transferring data with URLs          |
+| `delta`         | `Git / Diff`              | `delta`                | `git-delta`           | Binary                  | Syntax-highlighting pager for git diffs                    |
+| `fd`            | `Filesystem / Search`     | `fd`                   | `fd-find`             | Binary                  | Fast, user-friendly alternative to `find`                  |
+| `fish`          | `Terminal / Shell`        | `fish`                 | `fish`                | Stow package (`fish`)   | Smart and user-friendly command line shell                 |
+| `fzf`           | `Terminal / Search`       | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder                  |
+| `gh`            | `Git / GitHub`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                          |
+| `git`           | `Version Control`         | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system          |
+| `htop`          | `System Monitoring`       | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor              |
+| `iperf3`        | `Networking / Benchmark`  | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                         |
+| `jq`            | `Data / JSON`             | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor       |
+| `ncdu`          | `Filesystem / Disk`       | `ncdu`                 | `ncdu`                | Binary                  | NCurses disk usage analyzer                                |
+| `neovim`        | `Editor / IDE`            | `neovim`               | `neovim`              | Stow package (`nvim-*`) | Hyperextensible Vim-based text editor                      |
+| `openssh`       | `Networking / SSH`        | `openssh`              | `openssh-client`      | Binary                  | OpenSSH secure connectivity client suite                   |
+| `ripgrep`       | `Filesystem / Search`     | `ripgrep`              | `ripgrep`             | Binary                  | Line-oriented search tool respecting gitignore             |
+| `rsync`         | `Filesystem / Sync`       | `rsync`                | `rsync`               | Binary                  | Fast, versatile file copying and synchronization tool      |
+| `stow`          | `Dotfiles / Symlinks`     | `stow`                 | `stow`                | Binary                  | Symlink farm manager for dotfiles packages                 |
+| `tmux`          | `Terminal / Multiplexer`  | `tmux`                 | `tmux`                | Stow package (`tmux`)   | Terminal multiplexer (XDG path `~/.config/tmux/tmux.conf`) |
+| `tree`          | `Filesystem / Navigation` | `tree`                 | `tree`                | Binary                  | Recursive directory listing visualizer                     |
+| `unzip`         | `Archive / Compression`   | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)      |
+| `watch`         | `System Monitoring`       | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian)    |
 
 ### 2. Language Runtimes & Conda Tools
 
-- **Python Runtime:** `CPython 3.13` provisioned via `Miniforge3` into `~/miniforge3`.
-- **Conda Tools (`devenv_conda_tools`):**
-  - `uv`: Extremely fast Python package manager and resolver installed via Conda.
-  - `ruff`: Fast Python linter and code formatter installed via Conda.
-  - `pre-commit`: Multi-language pre-commit hook orchestrator installed via Conda.
-- **Node.js Runtime:** Pinned default version `22.23.2` managed via `nvm.fish` (declared in
-  `dotfiles/fish/.config/fish/conf.d/00-devenv.fish`).
+| Tool / Runtime                 | Category / Language                                             | Provisioned Via                         | Description                                                            |
+| ------------------------------ | --------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| `CPython 3.13` / `conda`       | **Python — Runtime & Environment Manager**                      | Detected Conda / Miniforge / Micromamba | Python language runtime and Conda environment manager                  |
+| `uv`                           | **Python — Package & Project Manager**                          | Conda (`conda-forge`)                   | Extremely fast Python package manager and resolver installed via Conda |
+| `ruff`                         | **Python — Linter & Formatter**                                 | Conda (`conda-forge`)                   | Fast Python linter and code formatter installed via Conda              |
+| `pre-commit`                   | **Multi-Language — Git Hooks**                                  | Conda (`conda-forge`)                   | Multi-language pre-commit hook orchestrator installed via Conda        |
+| `nvm.fish` + `Node.js 22.23.2` | **JavaScript / TypeScript — Node.js Runtime & Version Manager** | `nvm.fish` (via `fisher`)               | Node.js version manager and runtime pinned in `00-devenv.fish`         |
 
 ### 3. GNU Stow Packages & Config Variants (`devenv_package_variants`)
 
 Dotfiles are managed via GNU Stow with the `--no-folding` flag, keeping leaf configuration symlinked while directories
 remain real local folders:
 
-- `dotfiles/bash/`: `.bashrc`, `.bash_profile` (with `.local` override hooks)
-- `dotfiles/conda/`: `.condarc` (strict conda-forge channel configuration)
-- `dotfiles/fish/`: `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
-- `dotfiles/tmux/`: `~/.config/tmux/tmux.conf`
-- `dotfiles/zsh/`: `.zshrc` (with `.local` override hooks)
-- **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`):**
+- `dotfiles/bash/` (**Terminal / Shell (Bash)**): `.bashrc`, `.bash_profile` (with `.local` override hooks)
+- `dotfiles/conda/` (**Python (Conda)**): `.condarc` (strict conda-forge channel configuration)
+- `dotfiles/fish/` (**Terminal / Shell (Fish)**): `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
+- `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.config/tmux/tmux.conf`
+- `dotfiles/zsh/` (**Terminal / Shell (Zsh)**): `.zshrc` (with `.local` override hooks)
+- **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`)** (**Editor / IDE (Neovim / Lua)**):
   - `nvim-kickstart` (`dotfiles/nvim-kickstart/`): Full Kickstart.nvim configuration with `vim.pack`, LSP, Treesitter,
     and locked plugin revisions. Default variant.
   - `nvim-minimal` (`dotfiles/nvim-minimal/`): Lightweight, blazing fast Neovim configuration using built-in settings
@@ -144,46 +189,55 @@ remain real local folders:
 
 Managed by `fisher`:
 
-1. `jorgebucaran/fisher`: Fish plugin manager.
-2. `reitzig/sdkman-for-fish@v2.1.0`: Fish shell integration for SDKMAN.
-3. `jorgebucaran/nvm.fish`: Node.js version manager wrapper for Fish.
+1. `jorgebucaran/fisher` (**Terminal / Shell**): Fish plugin manager.
+2. `reitzig/sdkman-for-fish@v2.1.0` (**Java / JVM**): Fish shell integration for SDKMAN.
+3. `jorgebucaran/nvm.fish` (**JavaScript / Node.js**): Node.js version manager wrapper for Fish.
 
 ### 5. Neovim Plugins (`nvim-pack-lock.json`)
 
-All 26 plugins managed via `vim.pack` and locked to explicit commit hashes:
+All 26 plugins managed via `vim.pack` and locked to explicit commit hashes (**Editor / IDE (Neovim / Lua)**):
 
-1. `LuaSnip` (`https://github.com/L3MON4D3/LuaSnip`)
-2. `blink.cmp` (`https://github.com/saghen/blink.cmp`)
-3. `conform.nvim` (`https://github.com/stevearc/conform.nvim`)
-4. `diffview.nvim` (`https://github.com/sindrets/diffview.nvim`)
-5. `fidget.nvim` (`https://github.com/j-hui/fidget.nvim`)
-6. `fzf-lua` (`https://github.com/ibhagwan/fzf-lua`)
-7. `gitsigns.nvim` (`https://github.com/lewis6991/gitsigns.nvim`)
-8. `guess-indent.nvim` (`https://github.com/NMAC427/guess-indent.nvim`)
-9. `mason-lspconfig.nvim` (`https://github.com/mason-org/mason-lspconfig.nvim`)
-10. `mason-tool-installer.nvim` (`https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim`)
-11. `mason.nvim` (`https://github.com/mason-org/mason.nvim`)
-12. `mini.completion` (`https://github.com/nvim-mini/mini.completion`)
-13. `mini.nvim` (`https://github.com/nvim-mini/mini.nvim`)
-14. `neo-tree.nvim` (`https://github.com/nvim-neo-tree/neo-tree.nvim`)
-15. `nui.nvim` (`https://github.com/MunifTanjim/nui.nvim`)
-16. `nvim-lspconfig` (`https://github.com/neovim/nvim-lspconfig`)
-17. `nvim-treesitter` (`https://github.com/nvim-treesitter/nvim-treesitter`)
-18. `plenary.nvim` (`https://github.com/nvim-lua/plenary.nvim`)
-19. `quicker.nvim` (`https://github.com/stevearc/quicker.nvim`)
-20. `render-markdown.nvim` (`https://github.com/MeanderingProgrammer/render-markdown.nvim`)
-21. `telescope-fzf-native.nvim` (`https://github.com/nvim-telescope/telescope-fzf-native.nvim`)
-22. `telescope-ui-select.nvim` (`https://github.com/nvim-telescope/telescope-ui-select.nvim`)
-23. `telescope.nvim` (`https://github.com/nvim-telescope/telescope.nvim`)
-24. `todo-comments.nvim` (`https://github.com/folke/todo-comments.nvim`)
-25. `tokyonight.nvim` (`https://github.com/folke/tokyonight.nvim`)
-26. `which-key.nvim` (`https://github.com/folke/which-key.nvim`)
+1. `LuaSnip` (**Editor / IDE (Neovim / Lua) — Snippets**): `https://github.com/L3MON4D3/LuaSnip`
+2. `blink.cmp` (**Editor / IDE (Neovim / Lua) — Completion**): `https://github.com/saghen/blink.cmp`
+3. `conform.nvim` (**Editor / IDE (Neovim / Lua) — Formatting**): `https://github.com/stevearc/conform.nvim`
+4. `diffview.nvim` (**Editor / IDE (Neovim / Lua) — Git / Diff**): `https://github.com/sindrets/diffview.nvim`
+5. `fidget.nvim` (**Editor / IDE (Neovim / Lua) — UI / LSP Progress**): `https://github.com/j-hui/fidget.nvim`
+6. `fzf-lua` (**Editor / IDE (Neovim / Lua) — Fuzzy Search**): `https://github.com/ibhagwan/fzf-lua`
+7. `gitsigns.nvim` (**Editor / IDE (Neovim / Lua) — Git Signs**): `https://github.com/lewis6991/gitsigns.nvim`
+8. `guess-indent.nvim` (**Editor / IDE (Neovim / Lua) — Indentation**): `https://github.com/NMAC427/guess-indent.nvim`
+9. `mason-lspconfig.nvim` (**Editor / IDE (Neovim / Lua) — LSP Management**):
+   `https://github.com/mason-org/mason-lspconfig.nvim`
+10. `mason-tool-installer.nvim` (**Editor / IDE (Neovim / Lua) — Tool Installer**):
+    `https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim`
+11. `mason.nvim` (**Editor / IDE (Neovim / Lua) — Package Manager**): `https://github.com/mason-org/mason.nvim`
+12. `mini.completion` (**Editor / IDE (Neovim / Lua) — Completion**): `https://github.com/nvim-mini/mini.completion`
+13. `mini.nvim` (**Editor / IDE (Neovim / Lua) — Utility Library**): `https://github.com/nvim-mini/mini.nvim`
+14. `neo-tree.nvim` (**Editor / IDE (Neovim / Lua) — File Explorer**): `https://github.com/nvim-neo-tree/neo-tree.nvim`
+15. `nui.nvim` (**Editor / IDE (Neovim / Lua) — UI Components**): `https://github.com/MunifTanjim/nui.nvim`
+16. `nvim-lspconfig` (**Editor / IDE (Neovim / Lua) — LSP Client**): `https://github.com/neovim/nvim-lspconfig`
+17. `nvim-treesitter` (**Editor / IDE (Neovim / Lua) — Syntax Highlighting**):
+    `https://github.com/nvim-treesitter/nvim-treesitter`
+18. `plenary.nvim` (**Editor / IDE (Neovim / Lua) — Lua Utility Functions**): `https://github.com/nvim-lua/plenary.nvim`
+19. `quicker.nvim` (**Editor / IDE (Neovim / Lua) — Quickfix UI**): `https://github.com/stevearc/quicker.nvim`
+20. `render-markdown.nvim` (**Editor / IDE (Neovim / Lua) — Markdown Rendering**):
+    `https://github.com/MeanderingProgrammer/render-markdown.nvim`
+21. `telescope-fzf-native.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Search Native**):
+    `https://github.com/nvim-telescope/telescope-fzf-native.nvim`
+22. `telescope-ui-select.nvim` (**Editor / IDE (Neovim / Lua) — UI Selection**):
+    `https://github.com/nvim-telescope/telescope-ui-select.nvim`
+23. `telescope.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Finder**):
+    `https://github.com/nvim-telescope/telescope.nvim`
+24. `todo-comments.nvim` (**Editor / IDE (Neovim / Lua) — Highlight Comments**):
+    `https://github.com/folke/todo-comments.nvim`
+25. `tokyonight.nvim` (**Editor / IDE (Neovim / Lua) — Colorscheme**): `https://github.com/folke/tokyonight.nvim`
+26. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
 
 ### 6. macOS GUI Casks & Purged Unmanaged Packages
 
-- **GUI Casks (`devenv_casks`):** `docker-desktop` (installed when `devenv_install_gui_casks: true`).
-- **Purged Duplicate Packages (`devenv_packages_remove`):** `nvm`, `node` (purged when `devenv_remove_unmanaged: true`
-  to prevent conflicts with `nvm.fish`).
+- **GUI Casks (`devenv_casks`):** `docker-desktop` (**Containers / Virtualization**) — installed when
+  `devenv_install_gui_casks: true`.
+- **Purged Duplicate Packages (`devenv_packages_remove`):** `nvm`, `node` (**JavaScript / Node.js**) — purged when
+  `devenv_remove_unmanaged: true` to prevent conflicts with `nvm.fish`.
 
 ---
 

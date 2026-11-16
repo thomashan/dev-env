@@ -1,36 +1,110 @@
 ---
-# Miniforge, not Anaconda, and installed to the SAME path on every OS so
-# dotfiles/fish/.config/fish/config.fish needs no OS branch for conda.
-# community.general has no conda/miniforge module (verified upstream), so the
-# upstream installer is fetched with get_url and run under a `creates:` guard.
+# Discovers and reuses existing Conda environments (Anaconda, Miniconda, Miniforge,
+# Mambaforge, Homebrew cask) via `which conda` and candidate root paths.
+# If no Conda is found, bootstraps Miniforge via Homebrew cask on macOS or
+# micromamba via Homebrew on Linux.
 
-- name: Pick the Miniforge installer for this platform
-  ansible.builtin.set_fact:
-    devenv_conda_installer: >-
-      Miniforge3-{{ devenv_miniforge_asset_os[devenv_system] }}-{{ devenv_miniforge_asset_arch[devenv_system][devenv_arch] }}.sh
-
-- name: Ensure the download cache exists
-  ansible.builtin.file:
-    path: "{{ devenv_home }}/.cache/dev-env"
-    state: directory
-    mode: "0755"
-
-- name: Download the Miniforge installer
-  ansible.builtin.get_url:
-    # devenv_miniforge_release defaults to 'latest'; pin it (e.g. "25.1.0-1") in
-    # group_vars/all.yml once a release is known good, so rebuilds are reproducible.
-    url: "https://github.com/conda-forge/miniforge/releases/{{ devenv_conda_release }}/download/{{ devenv_conda_installer }}"
-    dest: "{{ devenv_home }}/.cache/dev-env/{{ devenv_conda_installer }}"
-    mode: "0755"
-
-- name: Install Miniforge into {{ devenv_conda_dir }}
+- name: Probe existing conda in PATH
   ansible.builtin.command:
-    cmd: /bin/bash "{{ devenv_home }}/.cache/dev-env/{{ devenv_conda_installer }}" -b -u -p "{{ devenv_conda_dir }}"
+    cmd: which conda
+  register: devenv_which_conda
+  changed_when: false
+  failed_when: false
+
+- name: Probe conda base prefix
+  ansible.builtin.command:
+    cmd: conda info --base
+  register: devenv_conda_info_base
+  changed_when: false
+  failed_when: false
+  when: devenv_which_conda.rc == 0
+
+- name: Stat candidate Conda roots
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: devenv_conda_candidate_stats
+  loop:
+    - /opt/homebrew/Caskroom/miniforge/base
+    - /usr/local/Caskroom/miniforge/base
+    - "{{ devenv_home }}/miniforge3"
+    - "{{ devenv_home }}/miniforge"
+    - "{{ devenv_home }}/mambaforge"
+    - "{{ devenv_home }}/miniconda3"
+    - "{{ devenv_home }}/anaconda3"
+    - /opt/miniforge3
+    - /opt/conda
+
+- name: Resolve discovered Conda root directory
+  ansible.builtin.set_fact:
+    devenv_discovered_conda_dir: >-
+      {{
+        (devenv_conda_info_base.stdout | trim)
+        if (devenv_which_conda.rc == 0 and devenv_conda_info_base.stdout is defined and (devenv_conda_info_base.stdout | trim | length > 0))
+        else ((devenv_conda_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first)
+      }}
+
+- name: Resolve discovered Conda executable
+  ansible.builtin.set_fact:
+    devenv_discovered_conda_bin: >-
+      {{
+        (devenv_which_conda.stdout | trim)
+        if (devenv_which_conda.rc == 0 and devenv_which_conda.stdout is defined and (devenv_which_conda.stdout | trim | length > 0))
+        else (
+          (devenv_discovered_conda_dir ~ '/bin/conda')
+          if (devenv_discovered_conda_dir | length > 0)
+          else ''
+        )
+      }}
+
+- name: Install Miniforge via Homebrew cask on macOS
+  community.general.homebrew_cask:
+    name: miniforge
+    state: present
+    path: "{{ devenv_brew_bin | default(omit) }}"
+  when:
+    - devenv_discovered_conda_dir | length == 0
+    - devenv_system == 'Darwin'
+
+- name: Install micromamba via Homebrew on Linux
+  community.general.homebrew:
+    name: micromamba
+    state: present
+    path: "{{ devenv_brew_bin | default(omit) }}"
+  when:
+    - devenv_discovered_conda_dir | length == 0
+    - devenv_system == 'Linux'
+
+- name: Initialize Conda root environment with micromamba on Linux
+  ansible.builtin.command:
+    cmd: >-
+      micromamba create -y -p "{{ devenv_conda_dir }}" -c conda-forge --override-channels
+      conda python=3.13 ansible-core ansible-lint pyyaml
     creates: "{{ devenv_conda_dir }}/bin/conda"
+  when:
+    - devenv_discovered_conda_dir | length == 0
+    - devenv_system == 'Linux'
+
+- name: Set active Conda directory
+  ansible.builtin.set_fact:
+    devenv_conda_dir: >-
+      {{
+        devenv_discovered_conda_dir
+        if (devenv_discovered_conda_dir | length > 0)
+        else (
+          '/opt/homebrew/Caskroom/miniforge/base'
+          if (devenv_system == 'Darwin' and devenv_arch in ['arm64', 'aarch64'])
+          else ('/usr/local/Caskroom/miniforge/base' if devenv_system == 'Darwin' else devenv_conda_dir)
+        )
+      }}
 
 - name: Record the conda executable
   ansible.builtin.set_fact:
-    devenv_conda_bin: "{{ devenv_conda_dir }}/bin/conda"
+    devenv_conda_bin: >-
+      {{
+        devenv_discovered_conda_bin
+        if (devenv_discovered_conda_bin | length > 0)
+        else (devenv_conda_dir | trim ~ '/bin/conda')
+      }}
 
 - name: Assert conda is runnable
   ansible.builtin.command:
@@ -46,6 +120,7 @@
   ansible.builtin.stat:
     path: "{{ devenv_home }}/.condarc"
   register: devenv_condarc
+
 - name: Assert .condarc is repo-managed before conda writes to it
   ansible.builtin.assert:
     that:

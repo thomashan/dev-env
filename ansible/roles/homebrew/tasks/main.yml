@@ -9,6 +9,7 @@
   loop:
     - /opt/homebrew/bin/brew     # Apple Silicon
     - /usr/local/bin/brew        # Intel
+    - /home/linuxbrew/.linuxbrew/bin/brew       # Linuxbrew
     - "{{ devenv_home }}/.linuxbrew/bin/brew"   # Linuxbrew (uncommon)
 
 - name: Record Homebrew location
@@ -47,6 +48,7 @@
   loop:
     - /opt/homebrew/bin/brew
     - /usr/local/bin/brew
+    - /home/linuxbrew/.linuxbrew/bin/brew
     - "{{ devenv_home }}/.linuxbrew/bin/brew"
   when: devenv_brew_bin | length == 0
 
