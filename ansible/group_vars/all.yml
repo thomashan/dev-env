@@ -1,10 +1,7 @@
 ---
 # Interpreter for the managed host (always localhost). `ansible_playbook_python`
 # is Ansible's documented way to pin the target interpreter to the controller's
-# own, so control node and host can never drift onto conda's python. It is
-# space-safe, which matters because `uv tool dir` sits under
-# ~/Library/Application Support on macOS -- a symlinked interpreter there loses
-# venv detection, so we do not try to build one.
+# own, so control node and host can never drift onto conda's python.
 ansible_python_interpreter: "{{ ansible_playbook_python | default('/usr/bin/env python3') }}"
 
 # Home directory, resolved from gathered facts. Used instead of the deprecated
@@ -116,8 +113,9 @@ devenv_packages_remove:
   - nvm      # brew nvm (bash-oriented) conflicts with nvm.fish, owns ~/.nvm
   - node     # brew node v26 shadowed nvm-managed node
 
-# --- uv-managed python tools (identical on every OS) ------------------------
-devenv_uv_tools:
+# --- conda-managed python tools (identical on every OS) ---------------------
+devenv_conda_tools:
+  - uv
   - ruff
   - pre-commit
 # Local checkout of additional CLI tooling repository.

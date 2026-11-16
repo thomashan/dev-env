@@ -16,5 +16,5 @@ skip_list:
   - yaml[line-length]
   # Symlinks carry no mode of their own; the roles set modes on real dirs/files.
   - risky-file-permissions
-  # Bootstrap installs upstream installers (Homebrew, uv, Miniforge) by design.
+  # Bootstrap installs upstream installers (Homebrew, Miniforge) by design.
   - no-changed-when

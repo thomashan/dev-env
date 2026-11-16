@@ -10,9 +10,10 @@ rules for this repository. All planning and execution agents must consult and ob
 This repository **is** the development environment. The machine is a build artifact of the repo, never the other way
 round.
 
-- **Installation Contract:** Pure `make -> conda -> ansible` bootstrap toolchain. `GNU Make >= 3.81` is the sole
-  cold-start prerequisite for any action in `dev-env`. `git` and `curl` checks and installs are deferred to Ansible's
-  `packages` role. `uv` is not required for installation and is installed purely for application development via Conda.
+- **Installation Contract:** Pure `make -> conda -> ansible` bootstrap toolchain. The system package manager — `brew`
+  (macOS) or `apt` (Linux) — is the system prerequisite; `GNU Make >= 3.81` is installed via `brew install make` (or
+  `xcode-select --install`) on macOS or `sudo apt install -y make` on Linux if absent. `git`, `curl`, and other packages
+  are managed by Ansible's `packages` role. `uv` is installed as part of standard Conda tooling (`devenv_conda_tools`).
   See `README.md`.
 - **No Shell Scripts:** No `.sh` files may be added to this repository. Orchestration belongs in `Makefile` recipes
   (short, reviewable) and Ansible tasks. Upstream installers fetched by `ansible.builtin.get_url` into
@@ -25,7 +26,8 @@ round.
   collect host settings, resolve dotfile conflicts, and persist user decisions to `~/.config/dev-env/choices.yml`.
 - **Package Management:** System tooling is declared in `ansible/group_vars/all.yml` by logical name only, with
   per-backend alias tables (`ansible/vars/pkg_brew.yml`, `ansible/vars/pkg_apt.yml`). Python tools are declared in the
-  same manifest under `devenv_uv_tools` and installed via Conda. Never hardcode a distribution package name into a role.
+  same manifest under `devenv_conda_tools` and installed via Conda. Never hardcode a distribution package name into a
+  role.
 - **Multi-OS Rule:** Every config and task must work on macOS (Darwin) and Linux. Never hardcode `/Users/...`,
   `/home/...` or `/opt/homebrew/...`; resolve paths from facts, `$HOME`, or `$XDG_*`. OS-specific differences go in
   `ansible/vars/os_<System>.yml`, not inline in role tasks.

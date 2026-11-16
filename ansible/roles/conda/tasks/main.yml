@@ -61,3 +61,19 @@
   loop: "{{ devenv_conda_envs }}"
   loop_control:
     label: "{{ item.name }}"
+
+- name: Install Conda development tools
+  ansible.builtin.command:
+    cmd: >-
+      "{{ devenv_conda_bin }}" install -y -c conda-forge --override-channels
+      {{ devenv_conda_tools | join(' ') }}
+    creates: "{{ devenv_conda_dir }}/bin/uv"
+
+- name: Install additional CLI tools from a local checkout
+  ansible.builtin.command:
+    cmd: >-
+      "{{ devenv_conda_dir }}/bin/uv" pip install --python "{{ devenv_conda_dir }}/bin/python" --no-deps -e
+      {{ devenv_holon_source }}/{{ devenv_holon_subdir }}
+  when: devenv_holon_source | length > 0
+  register: devenv_holon
+  changed_when: "'Successfully installed' in devenv_holon.stdout or 'Updated' in devenv_holon.stdout"
