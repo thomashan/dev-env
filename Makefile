@@ -39,7 +39,7 @@ endif
 
 # --- refuse to run under a non-GNU make, before any target executes ---------
 ifeq ($(origin MAKE_VERSION),undefined)
-$(error dev-env requires GNU Make. macOS: xcode-select --install (ships /usr/bin/make). Debian/Ubuntu: apt-get install -y make)
+$(error dev-env requires GNU Make. macOS: xcode-select --install (ships /usr/bin/make). Debian/Ubuntu: apt install -y make)
 endif
 MAKE_OK := $(shell expr $(firstword $(subst ., ,$(MAKE_VERSION))) \>= 3 2>/dev/null)
 ifeq ($(MAKE_OK),0)
@@ -80,7 +80,7 @@ help:
 	@printf "  %-16s %s\n" "clean-cache"    "Delete downloaded installers in ~/.cache/dev-env"
 	@echo ""
 	@echo "Cold start on a machine without make: install GNU Make first (macOS:"
-	@echo "xcode-select --install; Debian/Ubuntu: sudo apt-get install -y make),"
+	@echo "xcode-select --install; Debian/Ubuntu: sudo apt install -y make),"
 	@echo "then run 'make install'. There is no curl | sh bootstrap by design."
 	@echo ""
 
@@ -93,7 +93,7 @@ check:
 	case "$$(uname -s)" in Darwin|Linux) echo "supported ($$(uname -s))";; *) echo "UNSUPPORTED: $$(uname -s)"; err=$$((err+1));; esac; \
 	printf "%-26s " "apt (Linux backend)"; \
 	case "$$(uname -s)" in Linux) \
-		if command -v apt-get >/dev/null 2>&1; then echo "ok"; else echo "UNSUPPORTED distro: only apt is supported in v1"; err=$$((err+1)); fi;; \
+		if command -v apt >/dev/null 2>&1; then echo "ok"; else echo "UNSUPPORTED distro: only apt is supported in v1"; err=$$((err+1)); fi;; \
 		*) echo "n/a";; esac; \
 	printf "%-26s " "conda"; \
 	if [ -x "$(CONDA)" ]; then conda_ver=$$("$(CONDA)" --version 2>/dev/null | head -1); echo "ok ($$conda_ver)"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
@@ -139,16 +139,29 @@ bootstrap:
 		target="$$HOME/.cache/dev-env/$$installer"; \
 		url="https://github.com/conda-forge/miniforge/releases/latest/download/$$installer"; \
 		if [ ! -f "$$target" ]; then \
-			echo "Fetching $$url..."; \
-			if command -v curl >/dev/null 2>&1; then \
-				curl -fsSL "$$url" -o "$$target" || exit 1; \
-			elif command -v wget >/dev/null 2>&1; then \
-				wget -qO "$$target" "$$url" || exit 1; \
-			elif command -v python3 >/dev/null 2>&1; then \
-				python3 -c "import urllib.request, sys; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$$url" "$$target" || exit 1; \
-			else \
-				echo "No fetcher found (need curl, wget, or python3)"; exit 1; \
+			if ! command -v curl >/dev/null 2>&1; then \
+				case "$$os" in \
+					Darwin) \
+						brew_bin=""; \
+						if [ -x /opt/homebrew/bin/brew ]; then brew_bin="/opt/homebrew/bin/brew"; \
+						elif [ -x /usr/local/bin/brew ]; then brew_bin="/usr/local/bin/brew"; \
+						elif command -v brew >/dev/null 2>&1; then brew_bin="$$(command -v brew)"; fi; \
+						if [ -n "$$brew_bin" ]; then \
+							"$$brew_bin" install curl || exit 1; \
+						else \
+							echo "Error: curl is missing and Homebrew was not found to install it. Please install curl or Homebrew." >&2; exit 1; \
+						fi ;; \
+					Linux) \
+						if [ "$$(id -u)" -ne 0 ]; then \
+							sudo apt update && sudo apt install -y curl || exit 1; \
+						else \
+							apt update && apt install -y curl || exit 1; \
+						fi ;; \
+					*) echo "Unsupported OS to install curl: $$os"; exit 1 ;; \
+				esac; \
 			fi; \
+			echo "Fetching $$url..."; \
+			curl -fsSL "$$url" -o "$$target" || exit 1; \
 		fi; \
 		/bin/bash "$$target" -b -u -p "$(CONDA_DIR)" || exit 1; \
 	fi
@@ -167,7 +180,8 @@ configure:
 	@if [ -x "$(CONDA_DIR)/bin/python3" ]; then \
 		"$(CONDA_DIR)/bin/python3" "$(SELF_DIR)/scripts/devenv_wizard.py"; \
 	else \
-		python3 "$(SELF_DIR)/scripts/devenv_wizard.py"; \
+		echo "Error: Python 3 not found in $(CONDA_DIR)/bin/python3. Run 'make bootstrap' first." >&2; \
+		exit 1; \
 	fi
 
 install: check

@@ -454,3 +454,27 @@ def test_gitignore_protects_generated_fish_state(repo_root):
     gitignore = read(repo_root / ".gitignore")
     for token in ("fish_variables", "local/", "intents/*.json"):
         assert token in gitignore, f".gitignore no longer ignores {token}"
+
+
+def test_makefile_bootstrap_uses_only_curl_and_installs_curl_via_brew_or_apt():
+    makefile = read(REPO_ROOT / "Makefile")
+    assert "wget" not in makefile, "wget should not appear in Makefile"
+    assert "urllib.request" not in makefile, "urllib.request should not appear in Makefile"
+    bootstrap_target = makefile.split("bootstrap:")[1].split("configure:")[0]
+    assert "curl -fsSL" in bootstrap_target, "curl -fsSL must be used to download Miniforge in bootstrap"
+    assert "install curl" in bootstrap_target, "bootstrap must install curl via brew if missing"
+    assert "apt install -y curl" in bootstrap_target, "bootstrap must install curl via apt if missing"
+
+
+def test_no_apt_get_in_repo():
+    target_files = [
+        REPO_ROOT / "Makefile",
+        REPO_ROOT / "ansible" / "roles" / "packages" / "tasks" / "main.yml",
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "holon-config" / "world" / "constraints.md",
+    ]
+    for path in target_files:
+        assert path.exists(), f"Target file {path} missing"
+        content = read(path)
+        assert "apt-get" not in content, f"apt-get found in {path}"
+

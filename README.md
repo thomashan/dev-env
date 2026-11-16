@@ -22,7 +22,8 @@ The environment enforces a pure `make -> conda -> ansible` toolchain hierarchy:
                                     v
 +-----------------------------------------------------------------------+
 |                     Step 1: make bootstrap                            |
-|  - Fetch Miniforge3 installer using curl, wget, or python3 urllib     |
+|  - Install curl via brew (macOS) or apt (Linux) if absent             |
+|  - Fetch Miniforge3 installer using curl only                         |
 |  - Install Miniforge Conda into ~/miniforge3                          |
 |  - Conda provisions: python=3.13, ansible-core, ansible-lint, pyyaml   |
 |  - Shim Ansible tools into ~/.local/share/dev-env/bin/                |

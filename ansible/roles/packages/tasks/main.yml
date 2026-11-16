@@ -25,7 +25,7 @@
     cmd: >-
       {{ 'brew uninstall ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' '))
          if devenv_pkg_backend == 'brew'
-         else 'apt-get remove -y ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' ')) }}
+         else 'apt remove -y ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' ')) }}
   become: "{{ devenv_become_package_install | bool }}"
   when:
     - devenv_remove_unmanaged | bool
