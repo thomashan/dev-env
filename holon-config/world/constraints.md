@@ -39,9 +39,15 @@ All execution and validation activities must run inside an isolated sandbox dete
 
 Because this repository owns the developer environment, execution runs must respect these limits:
 
-- **GNU Stow Dotfile Management:** GNU Stow (`stow`) is an explicit prerequisite for managing dotfiles. Dotfiles are
-  structured into per-tool Stow packages (`bash`, `conda`, `fish`, `nvim`, `tmux`, `zsh`) under `dotfiles/<pkg>/` and
-  symlinked via `stow --no-folding --restow`. Directory folding is strictly prohibited.
+- **GNU Stow Multi-Variant Dotfile Management:** GNU Stow (`stow`) is an explicit prerequisite for managing dotfiles.
+  Dotfiles are structured into per-tool and multi-variant Stow packages (`bash`, `conda`, `fish`, `nvim-kickstart`,
+  `nvim-minimal`, `nvim-lazyvim`, `tmux`, `zsh`) under `dotfiles/<pkg>/` and symlinked via `stow --no-folding --restow`.
+  Directory folding is strictly prohibited. Inactive variants are unlinked via `stow --delete` prior to restowing.
+- **Pure Make -> Conda -> Ansible Bootstrap:** Toolchain bootstrapping flows strictly from GNU Make (`>= 3.81`) to
+  Miniforge Conda into `~/miniforge3`, which provisions Ansible and Python bootstrap tooling. `git` and `curl` are
+  deferred to Ansible's `packages` role; `uv` is installed via Conda purely for user application development.
+- **Host Wizard Configuration:** User choices and conflict resolution decisions are gathered via `make configure`
+  (`scripts/devenv_wizard.py`) and persisted to `~/.config/dev-env/choices.yml`. Ansible reads this file cleanly.
 - **Converge Through the Manifest:** Add a package by editing `ansible/group_vars/all.yml` plus the alias tables --
   never by running `brew install` / `apt-get install` inside an execution step. Undeclared installs are invisible to
   every other machine.

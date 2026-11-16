@@ -19,6 +19,24 @@
       management. Please install stow via your package manager or run the packages role.
     quiet: true
 
+- name: Unstow inactive variant packages
+  ansible.builtin.command:
+    cmd: >-
+      stow --delete -v
+      {{ '-n' if ansible_check_mode else '' }}
+      -d "{{ devenv_repo_root }}/dotfiles"
+      -t "{{ devenv_home }}"
+      {{ devenv_inactive_packages | join(' ') }}
+  when: (devenv_inactive_packages | default([])) | length > 0
+  register: devenv_unstow_inactive
+  changed_when: "'UNLINK:' in devenv_unstow_inactive.stderr"
+  failed_when: false
+
+- name: Filter out skipped link paths
+  ansible.builtin.set_fact:
+    devenv_links: "{{ devenv_links | rejectattr('dest', 'in', devenv_skip_links | default([])) | list }}"
+  when: (devenv_skip_links | default([])) | length > 0
+
 - name: Timestamp for this run's backups
   ansible.builtin.set_fact:
     devenv_backup_dir: "{{ devenv_home }}/.local/share/dev-env/backup/{{ ansible_facts.date_time.iso8601_basic_short }}"

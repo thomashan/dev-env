@@ -277,7 +277,7 @@ def test_makefile_recipes_are_tab_indented():
 
 def test_nvim_lockfile_covers_every_declared_plugin():
     """init.lua and loaded plugins install via vim.pack; an unlocked plugin is not reproducible."""
-    nvim_dir = REPO_ROOT / "dotfiles" / "nvim" / ".config" / "nvim"
+    nvim_dir = REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim"
     init_file = nvim_dir / "init.lua"
     lock = yaml.safe_load(read(nvim_dir / "nvim-pack-lock.json"))
 
@@ -326,14 +326,27 @@ def test_stow_packages_match_dotfiles_subdirectories(group_vars):
     dotfiles_dir = REPO_ROOT / "dotfiles"
     pkg_dirs = {p.name for p in dotfiles_dir.iterdir() if p.is_dir()}
     stow_pkgs = set(group_vars.get("devenv_stow_packages", []))
-    assert stow_pkgs == pkg_dirs, (
-        f"devenv_stow_packages {sorted(stow_pkgs)} does not match dotfiles/ subdirs {sorted(pkg_dirs)}"
+    assert stow_pkgs <= pkg_dirs, (
+        f"devenv_stow_packages {sorted(stow_pkgs)} not contained in dotfiles/ subdirs {sorted(pkg_dirs)}"
     )
-    assert stow_pkgs == {"bash", "conda", "fish", "nvim", "tmux", "zsh"}
+    # Every variant package declared in devenv_package_variants must correspond to a dotfiles subdir
+    variant_pkgs = {
+        v_info["package"]
+        for tool_info in group_vars.get("devenv_package_variants", {}).values()
+        for v_info in tool_info.get("variants", {}).values()
+    }
+    base_pkgs = {"bash", "conda", "fish", "tmux", "zsh"}
+    assert pkg_dirs == (base_pkgs | variant_pkgs)
 
 
 def test_all_tracked_dotfiles_belong_to_stow_packages_and_are_linked(group_vars):
     stow_pkgs = set(group_vars.get("devenv_stow_packages", []))
+    variant_pkgs = {
+        v_info["package"]
+        for tool_info in group_vars.get("devenv_package_variants", {}).values()
+        for v_info in tool_info.get("variants", {}).values()
+    }
+    all_known_pkgs = stow_pkgs | variant_pkgs
     manifest_srcs = {entry["src"] for entry in group_vars.get("devenv_links", [])}
     dotfiles_dir = REPO_ROOT / "dotfiles"
     for path in dotfiles_dir.rglob("*"):
@@ -343,8 +356,9 @@ def test_all_tracked_dotfiles_belong_to_stow_packages_and_are_linked(group_vars)
         repo_rel = str(path.relative_to(REPO_ROOT))
         assert len(rel.parts) > 1, f"{repo_rel} is directly under dotfiles/ outside a stow package"
         pkg = rel.parts[0]
-        assert pkg in stow_pkgs, f"{repo_rel} package '{pkg}' not in devenv_stow_packages"
-        assert repo_rel in manifest_srcs, f"{repo_rel} is not declared in devenv_links"
+        assert pkg in all_known_pkgs, f"{repo_rel} package '{pkg}' not in known packages"
+        if pkg in stow_pkgs:
+            assert repo_rel in manifest_srcs, f"{repo_rel} is not declared in devenv_links"
 
 
 def test_readme_manifest_coverage(group_vars):
@@ -360,9 +374,52 @@ def test_readme_manifest_coverage(group_vars):
             continue
         name = line.split("@")[0]
         assert name in readme or line in readme, f"README.md missing fish plugin: {line}"
-    lock = yaml.safe_load(read(REPO_ROOT / "dotfiles" / "nvim" / ".config" / "nvim" / "nvim-pack-lock.json"))
+    lock = yaml.safe_load(read(REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "nvim-pack-lock.json"))
     for plugin_name, entry in lock["plugins"].items():
         assert plugin_name in readme or entry["src"] in readme, f"README.md missing Neovim plugin: {plugin_name}"
+
+
+def test_no_astral_or_uv_tool_install_in_makefile_or_uv_role():
+    makefile = read(REPO_ROOT / "Makefile")
+    uv_role = read(REPO_ROOT / "ansible" / "roles" / "uv" / "tasks" / "main.yml")
+    for content, src in [(makefile, "Makefile"), (uv_role, "uv role")]:
+        assert "astral.sh/uv/install.sh" not in content, f"{src} still references astral.sh/uv/install.sh"
+        assert "uv tool install" not in content, f"{src} still uses uv tool install"
+
+
+def test_conda_runs_before_uv_in_site_yml():
+    site = yaml.safe_load(read(REPO_ROOT / "ansible" / "site.yml"))
+    roles = [entry["role"] for entry in site[0]["roles"] if isinstance(entry, dict) and "role" in entry]
+    assert "conda" in roles, "conda role missing from site.yml"
+    assert "uv" in roles, "uv role missing from site.yml"
+    assert roles.index("conda") < roles.index("uv"), "conda role must execute before uv role in site.yml"
+
+
+def test_makefile_check_probes_make_and_conda_without_hard_git_curl_uv():
+    makefile = read(REPO_ROOT / "Makefile")
+    assert "GNU Make" in makefile
+    assert "conda" in makefile
+    # uv must not be checked as a prerequisite in make check
+    check_target = makefile.split("check:")[1].split("bootstrap:")[0]
+    assert 'printf "%-26s " "uv"' not in check_target, "uv should not be probed in make check"
+    assert "deferred: will be installed by Ansible packages role" in check_target, (
+        "git/curl must be deferred informational checks"
+    )
+
+
+def test_package_variants_structure_and_invariants(group_vars):
+    variants_map = group_vars.get("devenv_package_variants")
+    assert variants_map is not None, "devenv_package_variants must be declared in group_vars/all.yml"
+    assert "nvim" in variants_map
+    nvim_config = variants_map["nvim"]
+    assert nvim_config.get("default") == "kickstart"
+    assert set(nvim_config.get("variants", {}).keys()) == {"kickstart", "minimal", "lazyvim"}
+    for v_name, v_info in nvim_config["variants"].items():
+        pkg_dir = REPO_ROOT / "dotfiles" / v_info["package"]
+        assert pkg_dir.is_dir(), f"variant {v_name} package dir {pkg_dir} missing"
+        assert (pkg_dir / ".config" / "nvim" / "init.lua").is_file(), (
+            f"variant {v_name} missing init.lua"
+        )
 
 
 def test_tmux_config_uses_the_xdg_path(link_manifest):
