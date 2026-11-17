@@ -174,6 +174,22 @@ def test_node_pin_is_declared_exactly_once_and_well_formed(group_vars):
     assert "devenv_node_version" not in read(REPO_ROOT / "ansible" / "group_vars" / "all.yml")
 
 
+def test_wizard_default_node_version_matches_fish_pin():
+    """Interactive wizard fallback must match the authoritative fish dotfiles pin."""
+    wizard_src = read(REPO_ROOT / "scripts" / "devenv_wizard.py")
+    wizard_pins = re.findall(
+        r'existing_choices\.get\("devenv_node_default_version",\s*"([^"]+)"\)',
+        wizard_src,
+    )
+    assert len(wizard_pins) == 1, f"expected exactly one wizard fallback node pin, found {wizard_pins}"
+
+    pin_file = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    fish_pins = re.findall(r"^set -g devenv_node_default_version (\S+)$", pin_file, flags=re.MULTILINE)
+    assert len(fish_pins) == 1, f"expected exactly one fish node pin, found {fish_pins}"
+
+    assert wizard_pins[0] == fish_pins[0] == "26.13.1"
+
+
 def test_node_bin_is_first_on_path():
     """This host had three node binaries; nvm must win over ~/.local/bin."""
     fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
