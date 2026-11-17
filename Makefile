@@ -185,7 +185,9 @@ bootstrap:
 			-r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
 	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"
+ifeq ($(MAKECMDGOALS),bootstrap)
 	@echo "Run 'make install' or 'make check-mode' next."
+endif
 
 configure:
 	@if [ -x "$(CONDA_DIR)/bin/python3" ]; then \
@@ -196,7 +198,7 @@ configure:
 	fi
 
 install: check
-	@$(MAKE) bootstrap
+	@$(MAKE) bootstrap MAKECMDGOALS=$(MAKECMDGOALS)
 	@if [ -t 0 ] && [ ! "$$CI" = "true" ] && [ ! -f "$$HOME/.config/dev-env/choices.yml" ]; then \
 		$(MAKE) configure || exit 1; \
 	fi

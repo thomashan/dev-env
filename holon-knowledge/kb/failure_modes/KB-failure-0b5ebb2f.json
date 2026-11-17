@@ -1,0 +1,29 @@
+{
+  "kb_id": "KB-failure-0b5ebb2f",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-17T14:19:06.811534+00:00",
+  "updated_ts": "2026-11-17T14:19:06.811534+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1794924407-e1e40642",
+      "ACT-REV-1794924406-8c2a0fd7"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794922981-unify-sh/P-1794922998-8e517433-antigravity-agent-gemini-3.8-flash-medium/E-1794923192-4e4b38ed-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 reviewer 2 completed",
+    "symptoms": []
+  }
+}
