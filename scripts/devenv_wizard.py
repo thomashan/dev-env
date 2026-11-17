@@ -448,7 +448,7 @@ def run_wizard(
     remove_unmanaged = bool(existing_choices.get("devenv_remove_unmanaged", False))
     py_version = str(existing_choices.get("devenv_python_version", "3.13"))
     conda_py = str(existing_choices.get("devenv_conda_env_python", "3.13"))
-    node_version = str(existing_choices.get("devenv_node_default_version", "22.23.2"))
+    node_version = str(existing_choices.get("devenv_node_default_version", "26.13.1"))
 
     if interactive:
         ans_shell = prompt_user(
