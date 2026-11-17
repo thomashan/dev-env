@@ -4,26 +4,21 @@
 # here is what puts node on PATH for non-interactive shells too (nvm.fish only
 # auto-activates in interactive sessions).
 
-- name: Read the node version pin from the dotfiles (single source of truth)
+- name: Read authoritative versions manifest (single source of truth)
   ansible.builtin.slurp:
-    src: "{{ devenv_repo_root }}/dotfiles/fish/.config/fish/conf.d/00-devenv.fish"
-  register: devenv_fish_pins
+    src: "{{ devenv_repo_root }}/versions.json"
+  register: devenv_versions_raw
 
-# Ansible's regex_search returns the whole match unless a group is requested,
-# so pull the line out first and strip the assignment instead of trusting a
-# capture group.
-- name: Parse the pin
+- name: Parse the pin from versions.json
   ansible.builtin.set_fact:
-    devenv_node_version: >-
-      {{ (devenv_fish_pins.content | b64decode).splitlines()
-         | select('match', 'set -g devenv_node_default_version [0-9]')
-         | map('split') | map('last') | first | default('') }}
+    devenv_node_default_version: "{{ (devenv_versions_raw.content | b64decode | from_json).get('node', '') }}"
+    devenv_node_version: "{{ (devenv_versions_raw.content | b64decode | from_json).get('node', '') }}"
 
 - name: Assert a node pin was found
   ansible.builtin.assert:
     that:
       - devenv_node_version | length > 0
-    fail_msg: "Could not parse devenv_node_default_version from dotfiles/fish/.config/fish/conf.d/00-devenv.fish"
+    fail_msg: "Could not parse node version from versions.json"
     quiet: true
 
 - name: Ensure the fisher path exists (plugin payloads stay out of the repo)

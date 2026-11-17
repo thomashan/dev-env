@@ -10,8 +10,8 @@ exactly as they will during a converge.
 from __future__ import annotations
 
 import base64
+import json
 import os
-import re
 import urllib.request
 
 import pytest
@@ -142,17 +142,17 @@ def test_backend_guard_rejects_the_rest(templar, group_vars, backend):
 
 
 def test_node_pin_is_parsed_from_the_real_fish_config(templar):
-    """Regression: regex_search returns the whole match, so this must not use it."""
-    text = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
-    rendered = templar(node_pin_expr(), {"devenv_fish_pins": {"content": base64.b64encode(text.encode())}})
-    expected = re.search(r"^set -g devenv_node_default_version (\S+)$", text, re.MULTILINE).group(1)
+    """The node pin is parsed from versions.json."""
+    text = read(REPO_ROOT / "versions.json")
+    rendered = templar(node_pin_expr(), {"devenv_versions_raw": {"content": base64.b64encode(text.encode())}})
+    expected = json.loads(text)["node"]
     assert rendered == expected
     assert "\n" not in rendered and " " not in rendered, f"pin parse leaked surrounding text: {rendered!r}"
 
 
 def test_node_pin_parse_fails_loudly_when_the_line_moves(templar):
-    """If the fish file is reformatted, the role must assert rather than install ''."""
-    rendered = templar(node_pin_expr(), {"devenv_fish_pins": {"content": base64.b64encode(b"set -g EDITOR nvim\n")}})
+    """If versions.json lacks a node pin, the role must assert rather than install ''."""
+    rendered = templar(node_pin_expr(), {"devenv_versions_raw": {"content": base64.b64encode(b"{}")}})
     guard = task("node", "Assert a node pin was found")["ansible.builtin.assert"]["that"][0]
     assert templar(guard, {"devenv_node_version": rendered}) is False
 
