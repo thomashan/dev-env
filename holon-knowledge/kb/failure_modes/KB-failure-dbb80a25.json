@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-dbb80a25",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-17T14:19:06.810848+00:00",
+  "updated_ts": "2026-11-17T14:19:06.810848+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1794924407-9854a8b7",
+      "ACT-FIND-1794924406-8f99391f"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794922981-unify-sh/P-1794922998-8e517433-antigravity-agent-gemini-3.8-flash-medium/E-1794923192-4e4b38ed-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R1-001-02",
+    "symptoms": [
+      "In `case \":$PATH:\" in`, patterns `\"$NVM_DIR/current/bin:\"*` and `\"$HOME/.local/bin:\"*` omit the leading colon. Because `\":$PATH:\"` starts with a colon, the patterns never match and always fall through to prepending, duplicating paths on repeated sourcing. Prefix with a colon (`\":$NVM_DIR/current/bin:\"*` and `\":$HOME/.local/bin:\"*`)."
+    ]
+  }
+}
