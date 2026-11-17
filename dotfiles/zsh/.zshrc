@@ -31,13 +31,6 @@ case "$(uname -s)" in
         ;;
 esac
 
-# --- tool paths that are user-installed and OS-independent ---
-for dir in "$HOME/.docker/bin" "$HOME/.lmstudio/bin" "$HOME/.antigravity-ide/antigravity-ide/bin"; do
-    if [ -d "$dir" ]; then
-        export PATH="$PATH:$dir"
-    fi
-done
-
 # --- Conda (miniforge): probe candidates for shell hook ---
 for conda_root in "$HOME/miniforge3" "$HOME/miniforge" "$HOME/mambaforge" "$HOME/anaconda3" \
     /opt/homebrew/Caskroom/miniforge/base /usr/local/Caskroom/miniforge/base /opt/miniforge3 /opt/conda; do
@@ -46,25 +39,6 @@ for conda_root in "$HOME/miniforge3" "$HOME/miniforge" "$HOME/mambaforge" "$HOME
         break
     fi
 done
-
-# --- SDKMAN ---
-case "$(uname -s)" in
-    Darwin)
-        if command -v brew >/dev/null 2>&1 && [ -d "$(brew --prefix 2>/dev/null)/opt/sdkman-cli" ]; then
-            export SDKMAN_DIR="$(brew --prefix)/opt/sdkman-cli/libexec"
-            [ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ] && . "$SDKMAN_DIR/bin/sdkman-init.sh"
-        elif [ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
-            export SDKMAN_DIR="$HOME/.sdkman"
-            . "$HOME/.sdkman/bin/sdkman-init.sh"
-        fi
-        ;;
-    *)
-        if [ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
-            export SDKMAN_DIR="$HOME/.sdkman"
-            . "$HOME/.sdkman/bin/sdkman-init.sh"
-        fi
-        ;;
-esac
 
 # --- Local override hook ---
 [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"

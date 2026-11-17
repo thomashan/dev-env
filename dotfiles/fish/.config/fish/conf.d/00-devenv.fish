@@ -24,9 +24,3 @@ set -gx nvm_data "$HOME/.local/share/nvm"
 set -gx nvm_mirror https://nodejs.org/dist
 set -g  nvm_default_version $devenv_node_default_version
 
-# --- editor / pager defaults -----------------------------------------------
-set -g  fish_greeting
-set -gx EDITOR nvim
-set -gx VISUAL nvim
-set -gx PAGER less
-command -v delta >/dev/null 1>&2; and set -gx GIT_PAGER delta
