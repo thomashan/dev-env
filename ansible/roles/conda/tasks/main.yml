@@ -11,13 +11,19 @@
   changed_when: false
   failed_when: false
 
-- name: Probe conda base prefix
-  ansible.builtin.command:
-    cmd: conda info --base
-  register: devenv_conda_info_base
-  changed_when: false
-  failed_when: false
-  when: devenv_which_conda.rc == 0
+- name: Stat candidate Conda binaries
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: devenv_conda_candidate_bin_stats
+  loop:
+    - /opt/homebrew/bin/conda
+    - /opt/homebrew/Caskroom/miniforge/base/bin/conda
+    - /opt/homebrew/Caskroom/miniforge/base/condabin/conda
+    - /usr/local/bin/conda
+    - /home/linuxbrew/.linuxbrew/bin/conda
+    - "{{ devenv_home }}/.linuxbrew/bin/conda"
+    - "{{ devenv_home }}/miniforge3/bin/conda"
+    - /opt/conda/bin/conda
 
 - name: Stat candidate Conda roots
   ansible.builtin.stat:
@@ -34,27 +40,38 @@
     - /opt/miniforge3
     - /opt/conda
 
-- name: Resolve discovered Conda root directory
-  ansible.builtin.set_fact:
-    devenv_discovered_conda_dir: >-
-      {{
-        (devenv_conda_info_base.stdout | trim)
-        if (devenv_which_conda.rc == 0 and devenv_conda_info_base.stdout is defined and (devenv_conda_info_base.stdout | trim | length > 0))
-        else ((devenv_conda_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first)
-      }}
-
 - name: Resolve discovered Conda executable
   ansible.builtin.set_fact:
     devenv_discovered_conda_bin: >-
       {{
         (devenv_which_conda.stdout | trim)
         if (devenv_which_conda.rc == 0 and devenv_which_conda.stdout is defined and (devenv_which_conda.stdout | trim | length > 0))
-        else (
-          (devenv_discovered_conda_dir ~ '/bin/conda')
-          if (devenv_discovered_conda_dir | length > 0)
-          else ''
-        )
+        else ((devenv_conda_candidate_bin_stats.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first)
       }}
+
+- name: Probe conda base prefix
+  ansible.builtin.command:
+    cmd: "{{ devenv_discovered_conda_bin }} info --base"
+  register: devenv_conda_info_base
+  changed_when: false
+  failed_when: false
+  when: devenv_discovered_conda_bin | length > 0
+
+- name: Resolve discovered Conda root directory
+  ansible.builtin.set_fact:
+    devenv_discovered_conda_dir: >-
+      {{
+        (devenv_conda_info_base.stdout | trim)
+        if (devenv_conda_info_base.stdout is defined and (devenv_conda_info_base.stdout | trim | length > 0))
+        else ((devenv_conda_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first)
+      }}
+
+- name: Fallback discovered Conda executable from root directory
+  ansible.builtin.set_fact:
+    devenv_discovered_conda_bin: "{{ devenv_discovered_conda_dir ~ '/bin/conda' }}"
+  when:
+    - devenv_discovered_conda_bin | length == 0
+    - devenv_discovered_conda_dir | length > 0
 
 - name: Install Miniforge via Homebrew cask on macOS
   community.general.homebrew_cask:
@@ -62,6 +79,7 @@
     state: present
     path: "{{ devenv_brew_bin | default(omit) }}"
   when:
+    - devenv_discovered_conda_bin | length == 0
     - devenv_discovered_conda_dir | length == 0
     - devenv_system == 'Darwin'
 
@@ -71,6 +89,7 @@
     state: present
     path: "{{ devenv_brew_bin | default(omit) }}"
   when:
+    - devenv_discovered_conda_bin | length == 0
     - devenv_discovered_conda_dir | length == 0
     - devenv_system == 'Linux'
 
@@ -81,6 +100,7 @@
       conda python=3.13 ansible-core ansible-lint pyyaml
     creates: "{{ devenv_conda_dir }}/bin/conda"
   when:
+    - devenv_discovered_conda_bin | length == 0
     - devenv_discovered_conda_dir | length == 0
     - devenv_system == 'Linux'
 
