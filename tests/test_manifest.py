@@ -702,7 +702,7 @@ def test_versions_json_python_alignment_with_consumers(group_vars) -> None:
 
     # group_vars/all.yml
     assert group_vars["devenv_python_version"] == py_version
-    assert group_vars["devenv_conda_env_python"] == py_version
+    assert group_vars["devenv_conda_env_python"] == "{{ devenv_python_version }}"
 
     # pyproject.toml
     pyproject = read(REPO_ROOT / "pyproject.toml")
@@ -764,5 +764,24 @@ def test_devenv_shell_snippets_exists_and_valid() -> None:
     # Block D: Local override hook loading
     assert ".bashrc.local" in content, "missing .bashrc.local override hook"
     assert ".zshrc.local" in content, "missing .zshrc.local override hook"
+
+
+def test_read_only_probe_tasks_check_mode() -> None:
+    """Read-only shell probe tasks in node and neovim roles must have check_mode: false."""
+    node_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml"))
+    node_probe = next(
+        (t for t in node_tasks if t.get("name") and "Verify which node a login shell resolves" in t["name"]),
+        None,
+    )
+    assert node_probe is not None, "Task 'Verify which node a login shell resolves' not found in node role"
+    assert node_probe.get("check_mode") is False, "Node login shell probe task must have check_mode: false"
+
+    neovim_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "neovim" / "tasks" / "main.yml"))
+    neovim_probe = next(
+        (t for t in neovim_tasks if t.get("name") and "Read the installed Neovim version" in t["name"]),
+        None,
+    )
+    assert neovim_probe is not None, "Task 'Read the installed Neovim version' not found in neovim role"
+    assert neovim_probe.get("check_mode") is False, "Neovim version probe task must have check_mode: false"
 
 

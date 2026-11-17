@@ -492,9 +492,6 @@ def run_wizard(
     py_version = str(existing_choices.get("devenv_python_version", "3.13"))
     if "python" in versions and "devenv_python_version" not in existing_choices:
         py_version = versions["python"]
-    conda_py = str(existing_choices.get("devenv_conda_env_python", "3.13"))
-    if "python" in versions and "devenv_conda_env_python" not in existing_choices:
-        conda_py = versions["python"]
     node_version = str(existing_choices.get("devenv_node_default_version", "26.13.1"))
     if "node" in versions and "devenv_node_default_version" not in existing_choices:
         node_version = versions["node"]
@@ -515,8 +512,7 @@ def run_wizard(
             )
             install_gui_casks = ans_casks.lower() in ("true", "1", "yes", "y")
 
-        py_version = prompt_user("Python runtime version", default=py_version, interactive=True)
-        conda_py = prompt_user("Conda dev environment Python version", default=conda_py, interactive=True)
+        py_version = prompt_user("Python version", default=py_version, interactive=True)
         node_version = prompt_user("Node.js default version", default=node_version, interactive=True)
 
     # --- Step E: Persist Choices ---
@@ -529,7 +525,7 @@ def run_wizard(
         "devenv_install_gui_casks": install_gui_casks,
         "devenv_remove_unmanaged": remove_unmanaged,
         "devenv_python_version": py_version,
-        "devenv_conda_env_python": conda_py,
+        "devenv_conda_env_python": py_version,
         "devenv_node_default_version": node_version,
     }
 
