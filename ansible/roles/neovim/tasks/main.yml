@@ -44,6 +44,7 @@
     cmd: nvim --version
   register: devenv_nvim_version
   changed_when: false
+  check_mode: false
 
 - name: Assert Neovim is new enough for vim.pack and nvim-pack-lock.json
   ansible.builtin.assert:

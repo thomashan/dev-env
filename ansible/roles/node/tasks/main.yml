@@ -63,6 +63,7 @@
     cmd: fish -lc "which node; node -v"
   register: devenv_node_which
   changed_when: false
+  check_mode: false
 
 - name: Assert nvm-managed node wins on PATH
   ansible.builtin.assert:

@@ -69,7 +69,7 @@ devenv_backup_dotfiles: true
 
 # --- language runtime pins --------------------------------------------------
 devenv_python_version: "3.13"          # pinned Python version
-devenv_conda_env_python: "3.13"
+devenv_conda_env_python: "{{ devenv_python_version }}"
 # Where Neovim comes from: 'package' (brew, current) or 'github' (release
 # tarball, needed on Debian/Ubuntu stable where the packaged build predates
 # vim.pack). Set per OS in ansible/vars/os_*.yml.

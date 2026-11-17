@@ -303,6 +303,46 @@ def test_run_wizard_non_interactive(tmp_path):
     assert choices["devenv_selected_variants"]["nvim"] == "kickstart"
     assert "nvim-kickstart" in choices["devenv_stow_packages"]
     assert choices["devenv_python_version"] == "3.13"
+    assert choices["devenv_conda_env_python"] == "3.13"
+
+
+def test_run_wizard_interactive_python_prompt(tmp_path):
+    repo_root = tmp_path / "repo"
+    home_dir = tmp_path / "home"
+    choices_file = home_dir / ".config" / "dev-env" / "choices.yml"
+
+    # Setup minimal repo
+    dotfiles = repo_root / "dotfiles"
+    (dotfiles / "bash").mkdir(parents=True)
+    (dotfiles / "nvim-kickstart").mkdir(parents=True)
+
+    prompts_called = []
+
+    def mock_prompt(prompt_str, default=None, interactive=True):
+        prompts_called.append(prompt_str)
+        if "Python version" in prompt_str:
+            return "3.12"
+        return default or ""
+
+    with patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt):
+        choices = run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=choices_file,
+            interactive=True,
+        )
+
+    # Check only one Python prompt was asked
+    python_prompts = [p for p in prompts_called if "Python" in p]
+    assert python_prompts == ["Python version"]
+
+    # Verify both keys in returned choices and choices.yml match the chosen version
+    assert choices["devenv_python_version"] == "3.12"
+    assert choices["devenv_conda_env_python"] == "3.12"
+
+    saved_choices = load_yaml_fallback(choices_file.read_text(encoding="utf-8"))
+    assert str(saved_choices["devenv_python_version"]) == "3.12"
+    assert str(saved_choices["devenv_conda_env_python"]) == "3.12"
 
 
 def test_main_cli_entrypoint(tmp_path):
