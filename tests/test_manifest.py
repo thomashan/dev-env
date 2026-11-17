@@ -525,3 +525,75 @@ def test_no_apt_get_in_repo():
         content = read(path)
         assert "apt-get" not in content, f"apt-get found in {path}"
 
+
+def test_dotfiles_contain_no_personal_paths():
+    """Verify dotfiles do not leak personal machine or agent paths."""
+    dotfiles_dir = REPO_ROOT / "dotfiles"
+    forbidden = [".lmstudio", ".antigravity-ide"]
+    for path in dotfiles_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        content = read(path)
+        for token in forbidden:
+            assert token not in content, f"{token} found in {path.relative_to(REPO_ROOT)}"
+
+
+def test_tmux_conf_is_comment_only_factory_default():
+    """Verify tmux configuration adheres to comment-only upstream factory defaults."""
+    tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".config" / "tmux" / "tmux.conf")
+    for line in tmux_conf.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        assert line.startswith("#"), f"Active tmux configuration found: {line}"
+
+
+def test_nvim_minimal_init_lua_is_comment_only():
+    """Verify nvim minimal variant contains no active statements, running vanilla defaults."""
+    init_lua = read(REPO_ROOT / "dotfiles" / "nvim-minimal" / ".config" / "nvim" / "init.lua")
+    for line in init_lua.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        assert line.startswith("--"), f"Active Lua configuration found in minimal init.lua: {line}"
+
+
+def test_nvim_kickstart_custom_plugins_contains_only_init_lua():
+    """Verify nvim kickstart custom plugins directory contains only the init.lua stub."""
+    custom_plugins_dir = (
+        REPO_ROOT
+        / "dotfiles"
+        / "nvim-kickstart"
+        / ".config"
+        / "nvim"
+        / "lua"
+        / "custom"
+        / "plugins"
+    )
+    files = {p.name for p in custom_plugins_dir.iterdir() if p.is_file()}
+    assert files == {"init.lua"}, f"Unexpected files in kickstart custom plugins: {files}"
+
+
+def test_nvim_lazyvim_example_starts_with_early_return():
+    """Verify nvim lazyvim example spec begins with early return to disable custom overrides."""
+    example_lua = read(
+        REPO_ROOT
+        / "dotfiles"
+        / "nvim-lazyvim"
+        / ".config"
+        / "nvim"
+        / "lua"
+        / "plugins"
+        / "example.lua"
+    )
+    executable_lines = [
+        line.strip()
+        for line in example_lua.splitlines()
+        if line.strip() and not line.strip().startswith("--")
+    ]
+    assert executable_lines, "No executable lines found in lazyvim example.lua"
+    assert executable_lines[0] == "if true then return {} end", (
+        f"LazyVim example.lua must begin with 'if true then return {{}} end', got {executable_lines[0]!r}"
+    )
+
+

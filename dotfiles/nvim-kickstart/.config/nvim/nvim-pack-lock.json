@@ -14,17 +14,9 @@
       "rev": "016802de402556da54c36bd7359b441266b01cdd",
       "src": "https://github.com/stevearc/conform.nvim"
     },
-    "diffview.nvim": {
-      "rev": "4516612fe98ff56ae0415a259ff6361a89419b0a",
-      "src": "https://github.com/sindrets/diffview.nvim"
-    },
     "fidget.nvim": {
       "rev": "9e0201673e08e997e7cf52afca5565c70bd117f3",
       "src": "https://github.com/j-hui/fidget.nvim"
-    },
-    "fzf-lua": {
-      "rev": "ed0e0ead1789ee349cbf025900931fb402b1e05e",
-      "src": "https://github.com/ibhagwan/fzf-lua"
     },
     "gitsigns.nvim": {
       "rev": "851a051e2bd2caba97e23314c68d69f1b1cf5d19",
@@ -46,22 +38,9 @@
       "rev": "2a6940af80375532e5e9e7c1f2fc6319a1b7a69d",
       "src": "https://github.com/mason-org/mason.nvim"
     },
-    "mini.completion": {
-      "rev": "4d77cdecc81f0e971288de16a012574f9ebbdeb9",
-      "src": "https://github.com/nvim-mini/mini.completion"
-    },
     "mini.nvim": {
       "rev": "a03ad899bda446b5a81cfa99d8aeeb92241522f3",
       "src": "https://github.com/nvim-mini/mini.nvim"
-    },
-    "neo-tree.nvim": {
-      "rev": "f3f3bf73414e400cf9fc13fda50f00404a8f8ab1",
-      "src": "https://github.com/nvim-neo-tree/neo-tree.nvim",
-      "version": ">=0.0.0"
-    },
-    "nui.nvim": {
-      "rev": "10fc361835c856ba4233ef5ea135b919bf3dce97",
-      "src": "https://github.com/MunifTanjim/nui.nvim"
     },
     "nvim-lspconfig": {
       "rev": "910f0c4d46aa186641518395bc7e6fffb4d23baf",
@@ -75,14 +54,6 @@
     "plenary.nvim": {
       "rev": "74b06c6c75e4eeb3108ec01852001636d85a932b",
       "src": "https://github.com/nvim-lua/plenary.nvim"
-    },
-    "quicker.nvim": {
-      "rev": "4a6883cb13fe097a20a046eb55f6dffd239276e3",
-      "src": "https://github.com/stevearc/quicker.nvim"
-    },
-    "render-markdown.nvim": {
-      "rev": "8e8795368391036643b622875a6da6a51bcd33f4",
-      "src": "https://github.com/MeanderingProgrammer/render-markdown.nvim"
     },
     "telescope-fzf-native.nvim": {
       "rev": "b25b749b9db64d375d782094e2b9dce53ad53a40",

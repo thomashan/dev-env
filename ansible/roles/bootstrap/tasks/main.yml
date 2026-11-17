@@ -45,6 +45,7 @@
       {{ (devenv_links | rejectattr('src', 'match', '^dotfiles/nvim-kickstart/') | list) +
          [{'src': 'dotfiles/nvim-lazyvim/.config/nvim/init.lua', 'dest': devenv_home ~ '/.config/nvim/init.lua'},
           {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/lazy.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/lazy.lua'},
+          {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/autocmds.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/autocmds.lua'},
           {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/keymaps.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/keymaps.lua'},
           {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/config/options.lua', 'dest': devenv_home ~ '/.config/nvim/lua/config/options.lua'},
           {'src': 'dotfiles/nvim-lazyvim/.config/nvim/lua/plugins/example.lua', 'dest': devenv_home ~ '/.config/nvim/lua/plugins/example.lua'}] }}

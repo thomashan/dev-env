@@ -177,12 +177,8 @@ devenv_links:
     dest: "{{ devenv_home }}/.config/nvim/init.lua"
   - src: dotfiles/nvim-kickstart/.config/nvim/nvim-pack-lock.json
     dest: "{{ devenv_home }}/.config/nvim/nvim-pack-lock.json"
-  - src: dotfiles/nvim-kickstart/.config/nvim/lua/custom/plugins/diffview.lua
-    dest: "{{ devenv_home }}/.config/nvim/lua/custom/plugins/diffview.lua"
   - src: dotfiles/nvim-kickstart/.config/nvim/lua/custom/plugins/init.lua
     dest: "{{ devenv_home }}/.config/nvim/lua/custom/plugins/init.lua"
-  - src: dotfiles/nvim-kickstart/.config/nvim/lua/custom/plugins/render-markdown.lua
-    dest: "{{ devenv_home }}/.config/nvim/lua/custom/plugins/render-markdown.lua"
   - src: dotfiles/nvim-kickstart/.config/nvim/lua/kickstart/health.lua
     dest: "{{ devenv_home }}/.config/nvim/lua/kickstart/health.lua"
   - src: dotfiles/nvim-kickstart/.config/nvim/lua/kickstart/plugins/autopairs.lua

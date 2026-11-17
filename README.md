@@ -195,42 +195,34 @@ Managed by `fisher`:
 
 ### 5. Neovim Plugins (`nvim-pack-lock.json`)
 
-All 26 plugins managed via `vim.pack` and locked to explicit commit hashes (**Editor / IDE (Neovim / Lua)**):
+All 19 plugins managed via `vim.pack` and locked to explicit commit hashes (**Editor / IDE (Neovim / Lua)**):
 
 1. `LuaSnip` (**Editor / IDE (Neovim / Lua) — Snippets**): `https://github.com/L3MON4D3/LuaSnip`
 2. `blink.cmp` (**Editor / IDE (Neovim / Lua) — Completion**): `https://github.com/saghen/blink.cmp`
 3. `conform.nvim` (**Editor / IDE (Neovim / Lua) — Formatting**): `https://github.com/stevearc/conform.nvim`
-4. `diffview.nvim` (**Editor / IDE (Neovim / Lua) — Git / Diff**): `https://github.com/sindrets/diffview.nvim`
-5. `fidget.nvim` (**Editor / IDE (Neovim / Lua) — UI / LSP Progress**): `https://github.com/j-hui/fidget.nvim`
-6. `fzf-lua` (**Editor / IDE (Neovim / Lua) — Fuzzy Search**): `https://github.com/ibhagwan/fzf-lua`
-7. `gitsigns.nvim` (**Editor / IDE (Neovim / Lua) — Git Signs**): `https://github.com/lewis6991/gitsigns.nvim`
-8. `guess-indent.nvim` (**Editor / IDE (Neovim / Lua) — Indentation**): `https://github.com/NMAC427/guess-indent.nvim`
-9. `mason-lspconfig.nvim` (**Editor / IDE (Neovim / Lua) — LSP Management**):
+4. `fidget.nvim` (**Editor / IDE (Neovim / Lua) — UI / LSP Progress**): `https://github.com/j-hui/fidget.nvim`
+5. `gitsigns.nvim` (**Editor / IDE (Neovim / Lua) — Git Signs**): `https://github.com/lewis6991/gitsigns.nvim`
+6. `guess-indent.nvim` (**Editor / IDE (Neovim / Lua) — Indentation**): `https://github.com/NMAC427/guess-indent.nvim`
+7. `mason-lspconfig.nvim` (**Editor / IDE (Neovim / Lua) — LSP Management**):
    `https://github.com/mason-org/mason-lspconfig.nvim`
-10. `mason-tool-installer.nvim` (**Editor / IDE (Neovim / Lua) — Tool Installer**):
-    `https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim`
-11. `mason.nvim` (**Editor / IDE (Neovim / Lua) — Package Manager**): `https://github.com/mason-org/mason.nvim`
-12. `mini.completion` (**Editor / IDE (Neovim / Lua) — Completion**): `https://github.com/nvim-mini/mini.completion`
-13. `mini.nvim` (**Editor / IDE (Neovim / Lua) — Utility Library**): `https://github.com/nvim-mini/mini.nvim`
-14. `neo-tree.nvim` (**Editor / IDE (Neovim / Lua) — File Explorer**): `https://github.com/nvim-neo-tree/neo-tree.nvim`
-15. `nui.nvim` (**Editor / IDE (Neovim / Lua) — UI Components**): `https://github.com/MunifTanjim/nui.nvim`
-16. `nvim-lspconfig` (**Editor / IDE (Neovim / Lua) — LSP Client**): `https://github.com/neovim/nvim-lspconfig`
-17. `nvim-treesitter` (**Editor / IDE (Neovim / Lua) — Syntax Highlighting**):
+8. `mason-tool-installer.nvim` (**Editor / IDE (Neovim / Lua) — Tool Installer**):
+   `https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim`
+9. `mason.nvim` (**Editor / IDE (Neovim / Lua) — Package Manager**): `https://github.com/mason-org/mason.nvim`
+10. `mini.nvim` (**Editor / IDE (Neovim / Lua) — Utility Library**): `https://github.com/nvim-mini/mini.nvim`
+11. `nvim-lspconfig` (**Editor / IDE (Neovim / Lua) — LSP Client**): `https://github.com/neovim/nvim-lspconfig`
+12. `nvim-treesitter` (**Editor / IDE (Neovim / Lua) — Syntax Highlighting**):
     `https://github.com/nvim-treesitter/nvim-treesitter`
-18. `plenary.nvim` (**Editor / IDE (Neovim / Lua) — Lua Utility Functions**): `https://github.com/nvim-lua/plenary.nvim`
-19. `quicker.nvim` (**Editor / IDE (Neovim / Lua) — Quickfix UI**): `https://github.com/stevearc/quicker.nvim`
-20. `render-markdown.nvim` (**Editor / IDE (Neovim / Lua) — Markdown Rendering**):
-    `https://github.com/MeanderingProgrammer/render-markdown.nvim`
-21. `telescope-fzf-native.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Search Native**):
+13. `plenary.nvim` (**Editor / IDE (Neovim / Lua) — Lua Utility Functions**): `https://github.com/nvim-lua/plenary.nvim`
+14. `telescope-fzf-native.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Search Native**):
     `https://github.com/nvim-telescope/telescope-fzf-native.nvim`
-22. `telescope-ui-select.nvim` (**Editor / IDE (Neovim / Lua) — UI Selection**):
+15. `telescope-ui-select.nvim` (**Editor / IDE (Neovim / Lua) — UI Selection**):
     `https://github.com/nvim-telescope/telescope-ui-select.nvim`
-23. `telescope.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Finder**):
+16. `telescope.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Finder**):
     `https://github.com/nvim-telescope/telescope.nvim`
-24. `todo-comments.nvim` (**Editor / IDE (Neovim / Lua) — Highlight Comments**):
+17. `todo-comments.nvim` (**Editor / IDE (Neovim / Lua) — Highlight Comments**):
     `https://github.com/folke/todo-comments.nvim`
-25. `tokyonight.nvim` (**Editor / IDE (Neovim / Lua) — Colorscheme**): `https://github.com/folke/tokyonight.nvim`
-26. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
+18. `tokyonight.nvim` (**Editor / IDE (Neovim / Lua) — Colorscheme**): `https://github.com/folke/tokyonight.nvim`
+19. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
 
 ### 6. macOS GUI Casks & Purged Unmanaged Packages
 

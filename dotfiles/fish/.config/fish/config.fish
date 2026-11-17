@@ -67,7 +67,3 @@ if test -n "$devenv_conda_base"
     eval "$($devenv_conda_base/bin/conda shell.fish hook)"
 end
 
-# --- tool paths that are user-installed and therefore OS-independent --------
-for dir in "$HOME/.docker/bin" "$HOME/.lmstudio/bin" "$HOME/.antigravity-ide/antigravity-ide/bin"
-    test -d "$dir"; and fish_add_path -gaP "$dir"
-end
