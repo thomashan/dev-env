@@ -31,6 +31,7 @@
     path: "{{ devenv_home }}/.config/fish/local/functions"
     state: directory
     mode: "0755"
+  check_mode: false
 
 - name: Install the fisher function
   ansible.builtin.get_url:
