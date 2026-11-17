@@ -7,6 +7,7 @@ something, and the rules that stop drift between the repo and a machine.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 
@@ -661,3 +662,81 @@ def test_makefile_conda_install_does_not_force_python_downgrade() -> None:
             assert "ansible-core" in line
             assert "ansible-lint" in line
             assert "pyyaml" in line
+
+
+def test_versions_json_schema_and_authoritative_keys() -> None:
+    """versions.json must exist at repository root and define authoritative versions."""
+    versions_file = REPO_ROOT / "versions.json"
+    assert versions_file.is_file(), "versions.json missing at repository root"
+    data = json.loads(read(versions_file))
+    assert isinstance(data, dict), "versions.json must parse to a dict"
+    for key in ("python", "node", "ansible_core", "neovim_min"):
+        assert key in data, f"versions.json missing required key: {key}"
+        assert isinstance(data[key], str) and data[key].strip(), f"key {key} in versions.json must be a non-empty string"
+    assert data["python"] == "3.13"
+    assert data["node"] == "26.13.1"
+    assert data["ansible_core"] == "2.22"
+    assert data["neovim_min"] == "0.12"
+
+
+def test_versions_json_node_alignment_with_fish_and_wizard() -> None:
+    """versions.json node pin must match fish dotfiles and devenv_wizard fallback."""
+    versions = json.loads(read(REPO_ROOT / "versions.json"))
+    node_pin = versions["node"]
+
+    pin_file = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    fish_pins = re.findall(r"^set -g devenv_node_default_version (\S+)$", pin_file, flags=re.MULTILINE)
+    assert len(fish_pins) == 1, f"expected exactly one fish node pin, found {fish_pins}"
+    assert fish_pins[0] == node_pin, f"fish node pin {fish_pins[0]} does not match versions.json {node_pin}"
+
+    wizard_src = read(REPO_ROOT / "scripts" / "devenv_wizard.py")
+    assert f'existing_choices.get("devenv_node_default_version", "{node_pin}")' in wizard_src or f'"{node_pin}"' in wizard_src
+    assert "versions.json" in wizard_src
+
+
+def test_versions_json_python_alignment_with_consumers(group_vars) -> None:
+    """versions.json python pin must match pyproject.toml, group_vars/all.yml, and Makefile."""
+    versions = json.loads(read(REPO_ROOT / "versions.json"))
+    py_version = versions["python"]
+
+    # group_vars/all.yml
+    assert group_vars["devenv_python_version"] == py_version
+    assert group_vars["devenv_conda_env_python"] == py_version
+
+    # pyproject.toml
+    pyproject = read(REPO_ROOT / "pyproject.toml")
+    assert f'requires-python = "=={py_version}.*"' in pyproject
+
+    # Makefile
+    makefile = read(REPO_ROOT / "Makefile")
+    assert f"PYTHON_VERSION ?= {py_version}" in makefile
+
+
+def test_neovim_role_assertion_syntax() -> None:
+    """Neovim version assert must use standard Ansible version comparison without .regex_replace calls."""
+    neovim_tasks = read(REPO_ROOT / "ansible" / "roles" / "neovim" / "tasks" / "main.yml")
+    assert ".regex_replace" not in neovim_tasks, ".regex_replace method call is invalid Jinja and causes runtime errors"
+    assert "is version('0.12', '>=')" in neovim_tasks or 'is version("0.12", ">=")' in neovim_tasks
+    assert "| regex_replace('^NVIM v', '')" in neovim_tasks or '| regex_replace("^NVIM v", "")' in neovim_tasks
+
+
+def test_makefile_lint_recipe_structure() -> None:
+    """Makefile lint target must support uv-managed run and provide conda fallback."""
+    makefile = read(REPO_ROOT / "Makefile")
+    lint_section = makefile.split("\nlint:")[1].split("\ndocs-fmt:")[0]
+    assert "command -v uv" in lint_section, "Makefile lint target must probe command -v uv"
+    assert "uv run --extra test ansible-lint" in lint_section, "Makefile lint target must run uv ansible-lint"
+    assert 'PATH="$(dir $(LINT)):$$PATH"' in lint_section, "Makefile lint target fallback must set PATH to dir of LINT"
+
+
+def test_node_role_fisher_directory_check_mode() -> None:
+    """Node role fisher directory task must set check_mode: false for clean dry-runs."""
+    node_tasks_content = read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml")
+    tasks = yaml.safe_load(node_tasks_content)
+    fisher_task = next(
+        (t for t in tasks if t.get("name") and "Ensure the fisher path exists" in t["name"]),
+        None,
+    )
+    assert fisher_task is not None, "Task 'Ensure the fisher path exists' not found in node role"
+    assert fisher_task.get("check_mode") is False, "fisher path directory task must have check_mode: false"
+

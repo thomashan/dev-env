@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import difflib
+import json
 import os
 import platform
 import shutil
@@ -23,6 +24,19 @@ try:
     import yaml
 except ImportError:  # pragma: no cover
     yaml = None  # type: ignore[assignment]
+
+
+def load_versions() -> dict[str, str]:
+    """Load authoritative versions from versions.json at repository root."""
+    versions_path = Path(__file__).resolve().parent.parent / "versions.json"
+    if versions_path.exists():
+        try:
+            data = json.loads(versions_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {str(k): str(v) for k, v in data.items()}
+        except (OSError, json.JSONDecodeError):
+            return {}
+    return {}
 
 
 def dump_yaml_fallback(data: dict[str, Any]) -> str:
@@ -474,9 +488,16 @@ def run_wizard(
     set_login_shell = bool(existing_choices.get("devenv_set_login_shell", False))
     install_gui_casks = bool(existing_choices.get("devenv_install_gui_casks", False))
     remove_unmanaged = bool(existing_choices.get("devenv_remove_unmanaged", False))
+    versions = load_versions()
     py_version = str(existing_choices.get("devenv_python_version", "3.13"))
+    if "python" in versions and "devenv_python_version" not in existing_choices:
+        py_version = versions["python"]
     conda_py = str(existing_choices.get("devenv_conda_env_python", "3.13"))
+    if "python" in versions and "devenv_conda_env_python" not in existing_choices:
+        conda_py = versions["python"]
     node_version = str(existing_choices.get("devenv_node_default_version", "26.13.1"))
+    if "node" in versions and "devenv_node_default_version" not in existing_choices:
+        node_version = versions["node"]
 
     if interactive:
         ans_shell = prompt_user(

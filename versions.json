@@ -1,0 +1,6 @@
+{
+  "python": "3.13",
+  "node": "26.13.1",
+  "ansible_core": "2.22",
+  "neovim_min": "0.12"
+}

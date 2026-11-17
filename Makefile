@@ -15,6 +15,8 @@ SELF_DIR := $(patsubst %/,%,$(dir $(realpath $(firstword $(MAKEFILE_LIST)))))
 
 export PATH := /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/home/linuxbrew/.linuxbrew/bin:$(HOME)/.linuxbrew/bin:$(PATH)
 
+PYTHON_VERSION ?= 3.13
+
 CONDA       ?= $(shell if command -v conda >/dev/null 2>&1; then command -v conda; \
 	elif [ -x /opt/homebrew/bin/conda ]; then echo /opt/homebrew/bin/conda; \
 	elif [ -x /usr/local/bin/conda ]; then echo /usr/local/bin/conda; \
@@ -166,7 +168,7 @@ bootstrap:
 				else \
 					echo "Error: micromamba not found after brew install micromamba" >&2; exit 1; \
 				fi; \
-				"$$mamba_bin" create -y -p "$(CONDA_DIR)" -c conda-forge --override-channels conda python=3.13 ansible-core ansible-lint pyyaml || exit 1 ;; \
+				"$$mamba_bin" create -y -p "$(CONDA_DIR)" -c conda-forge --override-channels conda python=$(PYTHON_VERSION) ansible-core ansible-lint pyyaml || exit 1 ;; \
 		esac; \
 	fi
 	@if [ -x "$(PB)" ]; then \
@@ -239,8 +241,13 @@ doctor:
 	@git -C "$(SELF_DIR)" ls-files dotfiles | sed -e 's#^#tracked: #'
 
 lint:
-	@test -x "$(LINT)" || { echo "ansible-lint not bootstrapped; run 'make bootstrap'"; exit 1; }
-	@cd "$(SELF_DIR)" && $(ANSIBLE_ENV) "$(LINT)" ansible/site.yml
+	@if command -v uv >/dev/null 2>&1; then \
+		cd "$(SELF_DIR)" && $(ANSIBLE_ENV) uv run --extra test ansible-lint ansible/site.yml; \
+	elif [ -x "$(LINT)" ]; then \
+		cd "$(SELF_DIR)" && PATH="$(dir $(LINT)):$$PATH" $(ANSIBLE_ENV) "$(LINT)" ansible/site.yml; \
+	else \
+		echo "ansible-lint not bootstrapped; run 'make bootstrap'" >&2; exit 1; \
+	fi
 
 docs-fmt:
 	@command -v npx >/dev/null 2>&1 || { echo "npx not found (install node via nvm) -- skipping prettier"; exit 0; }
