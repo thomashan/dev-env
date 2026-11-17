@@ -120,7 +120,9 @@ def test_no_shell_scripts_are_tracked(repo_root):
     """
     tracked = subprocess.run(
         ["git", "-C", str(repo_root), "ls-files", "-co", "--exclude-standard"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.splitlines()
     offenders = [path for path in tracked if path.endswith(".sh") and not path.startswith("dotfiles/examples/")]
     assert not offenders, f"shell scripts are not allowed in this repository: {offenders}"
@@ -147,9 +149,7 @@ def test_dotfiles_hardcode_no_per_user_paths():
             continue
         rel = path.relative_to(REPO_ROOT)
         # Comments legitimately name the paths the file avoids; only code counts.
-        code = "\n".join(
-            line for line in read(path).splitlines() if not line.lstrip().startswith("#")
-        )
+        code = "\n".join(line for line in read(path).splitlines() if not line.lstrip().startswith("#"))
         assert "/Users/" not in code, f"{rel} hardcodes a macOS home path"
         # /home/linuxbrew is the fixed Linuxbrew prefix, not a user home.
         stray = re.findall(r"(?<![\w.])/home/(?!linuxbrew)[\w./-]+", code)
@@ -216,13 +216,54 @@ def test_pyproject_declares_the_same_python(group_vars):
 
 def test_every_task_uses_a_fully_qualified_module_name():
     reserved = {
-        "name", "when", "until", " retries", "loop", "loop_control", "register", "tags", "become",
-        "become_user", "become_method", "vars", "vars_prompt", "notify", "changed_when",
-        "failed_when", "unreachable_when", "ignore_errors", "ignore_unreachable", "run_once",
-        "any_errors_fatal", "check_mode", "diff", "delegate_to", "delegation_facts",
-        "environment", "retries", "delay", "poll", "timeout", "no_log", "local_action", "action",
-        "args", "block", "rescue", "always", "listen", "throttle", "connection", "remote_user",
-        "module_defaults", "label", "pause", "msg", "with_items", "with_dict", "with_fileglob",
+        "name",
+        "when",
+        "until",
+        " retries",
+        "loop",
+        "loop_control",
+        "register",
+        "tags",
+        "become",
+        "become_user",
+        "become_method",
+        "vars",
+        "vars_prompt",
+        "notify",
+        "changed_when",
+        "failed_when",
+        "unreachable_when",
+        "ignore_errors",
+        "ignore_unreachable",
+        "run_once",
+        "any_errors_fatal",
+        "check_mode",
+        "diff",
+        "delegate_to",
+        "delegation_facts",
+        "environment",
+        "retries",
+        "delay",
+        "poll",
+        "timeout",
+        "no_log",
+        "local_action",
+        "action",
+        "args",
+        "block",
+        "rescue",
+        "always",
+        "listen",
+        "throttle",
+        "connection",
+        "remote_user",
+        "module_defaults",
+        "label",
+        "pause",
+        "msg",
+        "with_items",
+        "with_dict",
+        "with_fileglob",
     }
     offenders = []
     for path in role_task_files() + [REPO_ROOT / "ansible" / "playbooks" / "unlink.yml"]:
@@ -238,8 +279,9 @@ def test_every_task_uses_a_fully_qualified_module_name():
 
 def test_every_role_is_wired_into_the_playbook():
     site = yaml.safe_load(read(REPO_ROOT / "ansible" / "site.yml"))
-    wired = {next(iter(entry.values())) if isinstance(entry, dict) else entry
-             for play in site for entry in play["roles"]}
+    wired = {
+        next(iter(entry.values())) if isinstance(entry, dict) else entry for play in site for entry in play["roles"]
+    }
     on_disk = {p.parent.parent.name for p in (REPO_ROOT / "ansible" / "roles").glob("*/tasks/main.yml")}
     assert on_disk <= wired, f"roles not reachable from site.yml: {sorted(on_disk - wired)}"
 
@@ -247,8 +289,12 @@ def test_every_role_is_wired_into_the_playbook():
 def test_bootstrap_role_always_runs():
     """Scoped runs (--tags dotfiles, node, ...) still need platform facts."""
     site = yaml.safe_load(read(REPO_ROOT / "ansible" / "site.yml"))
-    bootstrap = next(entry for play in site for entry in play["roles"]
-                     if isinstance(entry, dict) and entry.get("role") == "bootstrap")
+    bootstrap = next(
+        entry
+        for play in site
+        for entry in play["roles"]
+        if isinstance(entry, dict) and entry.get("role") == "bootstrap"
+    )
     assert "always" in bootstrap["tags"]
 
 
@@ -300,11 +346,7 @@ def test_nvim_lockfile_covers_every_declared_plugin():
     lock = yaml.safe_load(read(nvim_dir / "nvim-pack-lock.json"))
 
     init_lines = [line for line in read(init_file).splitlines() if not line.lstrip().startswith("--")]
-    active_requires = {
-        m.group(1)
-        for line in init_lines
-        if (m := re.search(r"require\s*['\"]([^'\"]+)['\"]", line))
-    }
+    active_requires = {m.group(1) for line in init_lines if (m := re.search(r"require\s*['\"]([^'\"]+)['\"]", line))}
 
     lua_files = [init_file]
     for path in (nvim_dir / "lua").rglob("*.lua"):
@@ -475,9 +517,7 @@ def test_package_variants_structure_and_invariants(group_vars):
     for v_name, v_info in nvim_config["variants"].items():
         pkg_dir = REPO_ROOT / "dotfiles" / v_info["package"]
         assert pkg_dir.is_dir(), f"variant {v_name} package dir {pkg_dir} missing"
-        assert (pkg_dir / ".config" / "nvim" / "init.lua").is_file(), (
-            f"variant {v_name} missing init.lua"
-        )
+        assert (pkg_dir / ".config" / "nvim" / "init.lua").is_file(), f"variant {v_name} missing init.lua"
 
 
 def test_tmux_config_uses_the_xdg_path(link_manifest):
@@ -525,7 +565,9 @@ def test_makefile_bootstrap_installs_conda_via_brew():
     assert "install --cask miniforge" in bootstrap_target
     assert "install micromamba" in bootstrap_target
     assert "curl" not in bootstrap_target, "curl should not appear in bootstrap recipe"
-    assert "Miniforge3-" not in bootstrap_target, "Miniforge3- release assets should not be fetched directly in bootstrap"
+    assert "Miniforge3-" not in bootstrap_target, (
+        "Miniforge3- release assets should not be fetched directly in bootstrap"
+    )
 
 
 test_makefile_bootstrap_uses_only_curl_and_installs_curl_via_brew_or_apt = (
@@ -580,36 +622,16 @@ def test_nvim_minimal_init_lua_is_comment_only():
 
 def test_nvim_kickstart_custom_plugins_contains_only_init_lua():
     """Verify nvim kickstart custom plugins directory contains only the init.lua stub."""
-    custom_plugins_dir = (
-        REPO_ROOT
-        / "dotfiles"
-        / "nvim-kickstart"
-        / ".config"
-        / "nvim"
-        / "lua"
-        / "custom"
-        / "plugins"
-    )
+    custom_plugins_dir = REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "lua" / "custom" / "plugins"
     files = {p.name for p in custom_plugins_dir.iterdir() if p.is_file()}
     assert files == {"init.lua"}, f"Unexpected files in kickstart custom plugins: {files}"
 
 
 def test_nvim_lazyvim_example_starts_with_early_return():
     """Verify nvim lazyvim example spec begins with early return to disable custom overrides."""
-    example_lua = read(
-        REPO_ROOT
-        / "dotfiles"
-        / "nvim-lazyvim"
-        / ".config"
-        / "nvim"
-        / "lua"
-        / "plugins"
-        / "example.lua"
-    )
+    example_lua = read(REPO_ROOT / "dotfiles" / "nvim-lazyvim" / ".config" / "nvim" / "lua" / "plugins" / "example.lua")
     executable_lines = [
-        line.strip()
-        for line in example_lua.splitlines()
-        if line.strip() and not line.strip().startswith("--")
+        line.strip() for line in example_lua.splitlines() if line.strip() and not line.strip().startswith("--")
     ]
     assert executable_lines, "No executable lines found in lazyvim example.lua"
     assert executable_lines[0] == "if true then return {} end", (
@@ -673,7 +695,9 @@ def test_versions_json_schema_and_authoritative_keys() -> None:
     assert isinstance(data, dict), "versions.json must parse to a dict"
     for key in ("python", "node", "ansible_core", "neovim_min"):
         assert key in data, f"versions.json missing required key: {key}"
-        assert isinstance(data[key], str) and data[key].strip(), f"key {key} in versions.json must be a non-empty string"
+        assert isinstance(data[key], str) and data[key].strip(), (
+            f"key {key} in versions.json must be a non-empty string"
+        )
     assert data["python"] == "3.13"
     assert data["node"] == "26.13.1"
     assert data["ansible_core"] == "2.22"
@@ -691,7 +715,10 @@ def test_versions_json_node_alignment_with_fish_and_wizard() -> None:
     assert fish_pins[0] == node_pin, f"fish node pin {fish_pins[0]} does not match versions.json {node_pin}"
 
     wizard_src = read(REPO_ROOT / "scripts" / "devenv_wizard.py")
-    assert f'existing_choices.get("devenv_node_default_version", "{node_pin}")' in wizard_src or f'"{node_pin}"' in wizard_src
+    assert (
+        f'existing_choices.get("devenv_node_default_version", "{node_pin}")' in wizard_src
+        or f'"{node_pin}"' in wizard_src
+    )
     assert "versions.json" in wizard_src
 
 
@@ -802,4 +829,94 @@ def test_fish_nvm_path_resolution_in_conf_d() -> None:
     assert 'fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"' in content
 
 
+def test_multishell_nvm_and_node_parity() -> None:
+    """Ensure Bash and Zsh dotfiles configure NVM and node PATH with parity."""
+    bashrc = read(REPO_ROOT / "dotfiles" / "bash" / ".bashrc")
+    zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
 
+    for shell_name, content in [("bash", bashrc), ("zsh", zshrc)]:
+        # Assert NVM_DIR definition respecting XDG_DATA_HOME or ~/.nvm
+        assert "NVM_DIR" in content, f"missing NVM_DIR definition in {shell_name}"
+        assert 'export NVM_DIR="$XDG_DATA_HOME/nvm"' in content or 'NVM_DIR="$XDG_DATA_HOME/nvm"' in content, (
+            f"NVM_DIR does not respect XDG_DATA_HOME in {shell_name}"
+        )
+        assert "$HOME/.nvm" in content, f"missing legacy ~/.nvm check in {shell_name}"
+
+        # Assert nvm.sh sourcing when present
+        assert "nvm.sh" in content, f"missing nvm.sh sourcing logic in {shell_name}"
+
+        # Assert nvm current binary path or ~/.local/bin is included in PATH
+        assert "$HOME/.local/bin" in content, f"missing ~/.local/bin PATH inclusion in {shell_name}"
+        assert "$NVM_DIR/current/bin" in content or "$XDG_DATA_HOME/nvm/current/bin" in content, (
+            f"missing nvm current/bin PATH inclusion in {shell_name}"
+        )
+
+
+def test_multishell_conda_and_homebrew_parity() -> None:
+    """Ensure Bash and Zsh dotfiles evaluate Homebrew shellenv and Conda hooks."""
+    bashrc = read(REPO_ROOT / "dotfiles" / "bash" / ".bashrc")
+    zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
+
+    for shell_name, content in [("bash", bashrc), ("zsh", zshrc)]:
+        # Multi-OS Homebrew evaluation
+        assert "brew shellenv" in content, f"missing brew shellenv in {shell_name}"
+        assert "/opt/homebrew/bin/brew" in content, f"missing Apple Silicon brew path in {shell_name}"
+
+        # Conda probe and hook evaluation logic
+        assert "miniforge3" in content, f"missing miniforge3 probe in {shell_name}"
+
+    assert "shell.bash hook" in bashrc, "missing conda shell.bash hook in bashrc"
+    assert "shell.zsh hook" in zshrc, "missing conda shell.zsh hook in zshrc"
+
+
+def test_node_role_symlinks_and_multishell_assertions() -> None:
+    """Node role must ensure ~/.local/bin binary symlinks and verify across bash, zsh, and fish."""
+    node_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml"))
+
+    # Assert tasks exist ensuring ~/.local/bin directory and symlinks for node, npm, npx
+    local_bin_dir_task = next(
+        (t for t in node_tasks if t.get("ansible.builtin.file", {}).get("path") == "{{ devenv_home }}/.local/bin"),
+        None,
+    )
+    assert local_bin_dir_task is not None, "Missing task ensuring ~/.local/bin directory"
+    assert local_bin_dir_task["ansible.builtin.file"].get("state") == "directory"
+
+    symlink_task = next(
+        (
+            t
+            for t in node_tasks
+            if t.get("ansible.builtin.file", {}).get("dest") == "{{ devenv_home }}/.local/bin/{{ item }}"
+        ),
+        None,
+    )
+    assert symlink_task is not None, "Missing task symlinking nvm binaries into ~/.local/bin"
+    file_spec = symlink_task["ansible.builtin.file"]
+    assert file_spec.get("state") == "link"
+    assert "{{ devenv_home }}/.local/share/nvm/current/bin/{{ item }}" in file_spec.get("src", "")
+    assert set(symlink_task.get("loop", [])) >= {"node", "npm", "npx"}
+
+    # Assert verification tasks probe and assert Node path and version across bash -lc, zsh -lc, and fish -lc
+    probe_commands = [
+        t.get("ansible.builtin.command", {}).get("cmd")
+        for t in node_tasks
+        if isinstance(t.get("ansible.builtin.command"), dict) and "cmd" in t["ansible.builtin.command"]
+    ]
+    assert any("bash -lc" in cmd and "which node; node -v" in cmd for cmd in probe_commands), (
+        "missing bash -lc node verification probe"
+    )
+    assert any("zsh -lc" in cmd and "which node; node -v" in cmd for cmd in probe_commands), (
+        "missing zsh -lc node verification probe"
+    )
+    assert any("fish -lc" in cmd and "which node; node -v" in cmd for cmd in probe_commands), (
+        "missing fish -lc node verification probe"
+    )
+
+    assertions = [
+        t.get("ansible.builtin.assert", {}).get("that", [])
+        for t in node_tasks
+        if isinstance(t.get("ansible.builtin.assert"), dict) and "that" in t["ansible.builtin.assert"]
+    ]
+    flat_assertions = [cond for sublist in assertions for cond in sublist]
+    assert any("devenv_node_which_bash" in cond for cond in flat_assertions), "missing bash node assertion"
+    assert any("devenv_node_which_zsh" in cond for cond in flat_assertions), "missing zsh node assertion"
+    assert any("devenv_node_which" in cond for cond in flat_assertions), "missing fish node assertion"

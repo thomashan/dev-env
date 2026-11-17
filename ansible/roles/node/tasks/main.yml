@@ -2,7 +2,9 @@
 # nvm owns node -- nothing installs node directly. nvm.fish is the nvm
 # implementation because fish is the login shell; the `current` symlink written
 # here is what puts node on PATH for non-interactive shells too (nvm.fish only
-# auto-activates in interactive sessions).
+# auto-activates in interactive sessions). Official nvm-sh is installed for
+# Bash and Zsh compatibility, with symlinks in ~/.local/bin providing global
+# priority across all shells.
 
 - name: Read authoritative versions manifest (single source of truth)
   ansible.builtin.slurp:
@@ -41,6 +43,18 @@
   changed_when: "'installed' in devenv_fisher.stdout | lower or 'updated' in devenv_fisher.stdout | lower or 'removed' in devenv_fisher.stdout | lower"
   tags: [fisher]
 
+- name: Ensure nvm data directory exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.local/share/nvm"
+    state: directory
+    mode: "0755"
+
+- name: Install official nvm script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/nvm.sh
+    dest: "{{ devenv_home }}/.local/share/nvm/nvm.sh"
+    mode: "0644"
+
 - name: Install the pinned node through nvm
   ansible.builtin.command:
     cmd: fish -c "nvm install {{ devenv_node_version }}"
@@ -53,6 +67,67 @@
     state: link
     force: true
 
+- name: Ensure ~/.local/bin directory exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.local/bin"
+    state: directory
+    mode: "0755"
+
+- name: Symlink nvm node binaries into ~/.local/bin
+  ansible.builtin.file:
+    src: "{{ devenv_home }}/.local/share/nvm/current/bin/{{ item }}"
+    dest: "{{ devenv_home }}/.local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - node
+    - npm
+    - npx
+
+- name: Verify which node a login shell resolves in Bash
+  ansible.builtin.command:
+    cmd: bash -lc "which node; node -v"
+  register: devenv_node_which_bash
+  changed_when: false
+  check_mode: false
+
+- name: Assert nvm-managed node wins on PATH in Bash
+  ansible.builtin.assert:
+    that:
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which_bash.stdout or '.local/bin/node' in devenv_node_which_bash.stdout"
+      - "'v' ~ devenv_node_version in devenv_node_which_bash.stdout"
+    fail_msg: |
+      node did not resolve to pinned version in Bash. Resolved:
+      {{ devenv_node_which_bash.stdout_lines | join(' | ') }}
+    quiet: true
+
+- name: Check if zsh is available
+  ansible.builtin.command:
+    cmd: which zsh
+  register: devenv_has_zsh
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Verify which node a login shell resolves in Zsh
+  ansible.builtin.command:
+    cmd: zsh -lc "which node; node -v"
+  register: devenv_node_which_zsh
+  when: devenv_has_zsh.rc == 0
+  changed_when: false
+  check_mode: false
+
+- name: Assert nvm-managed node wins on PATH in Zsh
+  ansible.builtin.assert:
+    that:
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which_zsh.stdout or '.local/bin/node' in devenv_node_which_zsh.stdout"
+      - "'v' ~ devenv_node_version in devenv_node_which_zsh.stdout"
+    fail_msg: |
+      node did not resolve to pinned version in Zsh. Resolved:
+      {{ devenv_node_which_zsh.stdout_lines | default([]) | join(' | ') }}
+    quiet: true
+  when: devenv_has_zsh.rc == 0
+
 - name: Verify which node a login shell resolves
   ansible.builtin.command:
     cmd: fish -lc "which node; node -v"
@@ -63,7 +138,7 @@
 - name: Assert nvm-managed node wins on PATH
   ansible.builtin.assert:
     that:
-      - "'.local/share/nvm/current/bin/node' in devenv_node_which.stdout"
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which.stdout or '.local/bin/node' in devenv_node_which.stdout"
       - "'v' ~ devenv_node_version in devenv_node_which.stdout"
     fail_msg: |
       node did not resolve through nvm. Resolved:
