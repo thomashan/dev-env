@@ -176,8 +176,12 @@ bootstrap:
 	fi
 	@mkdir -p "$(DEVENV_HOME)" "$(COLLECTIONS)"
 	@test -x "$(PB)" || { echo "bootstrap: $(PB) is missing or not executable"; exit 1; }
-	@ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
-		-r "$(SELF_DIR)/ansible/requirements.yml" --force || exit 1
+	@if [ -d "$(COLLECTIONS)/ansible_collections/community/general" ]; then \
+		echo "Ansible collections: ok (already installed in $(COLLECTIONS))"; \
+	else \
+		ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
+			-r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
+	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"
 	@echo "Run 'make install' or 'make check-mode' next."
 
