@@ -165,7 +165,7 @@ All 22 core packages defined in `ansible/group_vars/all.yml`:
 | `uv`                           | **Python — Package & Project Manager**                          | Conda (`conda-forge`)                   | Extremely fast Python package manager and resolver installed via Conda |
 | `ruff`                         | **Python — Linter & Formatter**                                 | Conda (`conda-forge`)                   | Fast Python linter and code formatter installed via Conda              |
 | `pre-commit`                   | **Multi-Language — Git Hooks**                                  | Conda (`conda-forge`)                   | Multi-language pre-commit hook orchestrator installed via Conda        |
-| `nvm.fish` + `Node.js 22.23.2` | **JavaScript / TypeScript — Node.js Runtime & Version Manager** | `nvm.fish` (via `fisher`)               | Node.js version manager and runtime pinned in `00-devenv.fish`         |
+| `nvm.fish` + `Node.js 26.13.1` | **JavaScript / TypeScript — Node.js Runtime & Version Manager** | `nvm.fish` (via `fisher`)               | Node.js version manager and runtime pinned in `00-devenv.fish`         |
 
 ### 3. GNU Stow Packages & Config Variants (`devenv_package_variants`)
 

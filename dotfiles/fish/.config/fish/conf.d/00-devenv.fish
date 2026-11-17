@@ -5,7 +5,7 @@
 # ============================================================================
 
 # --- version pins (source of truth; kept here so they are git-tracked) ------
-set -g devenv_node_default_version 22.23.2
+set -g devenv_node_default_version 26.13.1
 
 # --- OS detection (single source of truth for the rest of the config) -------
 switch (uname)
