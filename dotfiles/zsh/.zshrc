@@ -18,44 +18,58 @@ fi
 case "$(uname -s)" in
     Darwin)
         if [ -x /opt/homebrew/bin/brew ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
+            case ":$PATH:" in
+                *":/opt/homebrew/bin:"*) ;;
+                *) eval "$(/opt/homebrew/bin/brew shellenv)" ;;
+            esac
         elif [ -x /usr/local/bin/brew ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
+            case ":$PATH:" in
+                *":/usr/local/bin:"*) ;;
+                *) eval "$(/usr/local/bin/brew shellenv)" ;;
+            esac
         fi
         ;;
     Linux)
         if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+            case ":$PATH:" in
+                *":/home/linuxbrew/.linuxbrew/bin:"*) ;;
+                *) eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ;;
+            esac
         elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
-            eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+            case ":$PATH:" in
+                *":$HOME/.linuxbrew/bin:"*) ;;
+                *) eval "$("$HOME/.linuxbrew/bin/brew" shellenv)" ;;
+            esac
         elif [ -d /home/linuxbrew/.linuxbrew/bin ]; then
-            export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH"
+            case ":$PATH:" in
+                *":/home/linuxbrew/.linuxbrew/bin:"*) ;;
+                *) export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH" ;;
+            esac
         fi
         ;;
 esac
 
-# NVM and Node configuration
-if [ -d "$HOME/.nvm" ] && [ ! -d "$XDG_DATA_HOME/nvm" ]; then
-    export NVM_DIR="$HOME/.nvm"
-else
-    export NVM_DIR="$XDG_DATA_HOME/nvm"
-fi
+# NVM and Node configuration (canonical XDG convention)
+export NVM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvm"
 
+# Re-assert NVM current bin and ~/.local/bin precedence ahead of Homebrew
 if [ -d "$NVM_DIR/current/bin" ]; then
     case ":$PATH:" in
-        *":$NVM_DIR/current/bin:"*) ;;
+        "$NVM_DIR/current/bin:"*) ;;
         *) export PATH="$NVM_DIR/current/bin:$PATH" ;;
     esac
 fi
 
-# Source nvm.sh hook if available
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-    . "$NVM_DIR/nvm.sh"
-elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
-    . "/opt/homebrew/opt/nvm/nvm.sh"
-elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then
-    . "/usr/local/opt/nvm/nvm.sh"
+if [ -d "$HOME/.local/bin" ]; then
+    case ":$PATH:" in
+        "$HOME/.local/bin:"*) ;;
+        *) export PATH="$HOME/.local/bin:$PATH" ;;
+    esac
 fi
+
+# Source nvm.sh hook and completion if available
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
 # Conda (Miniforge) Shell Hook Probe and Activation
 for conda_root in "$HOME/miniforge3" "$HOME/miniforge" "$HOME/mambaforge" \

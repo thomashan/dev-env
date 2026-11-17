@@ -823,9 +823,12 @@ def test_login_shell_and_gui_casks_defaults(group_vars) -> None:
 
 
 def test_fish_nvm_path_resolution_in_conf_d() -> None:
-    """00-devenv.fish must define XDG_DATA_HOME fallback and prepend nvm node bin to PATH."""
+    """00-devenv.fish must define XDG_DATA_HOME, unified nvm_data, fallback links, and prepend nvm bin."""
     content = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
     assert 'set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"' in content
+    assert "set -g nvm_data $XDG_DATA_HOME/nvm/versions/node" in content
+    assert "$XDG_DATA_HOME/nvm/versions/node" in content
+    assert "ln -s" in content
     assert 'fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"' in content
 
 
@@ -835,38 +838,57 @@ def test_multishell_nvm_and_node_parity() -> None:
     zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
 
     for shell_name, content in [("bash", bashrc), ("zsh", zshrc)]:
-        # Assert NVM_DIR definition respecting XDG_DATA_HOME or ~/.nvm
-        assert "NVM_DIR" in content, f"missing NVM_DIR definition in {shell_name}"
-        assert 'export NVM_DIR="$XDG_DATA_HOME/nvm"' in content or 'NVM_DIR="$XDG_DATA_HOME/nvm"' in content, (
-            f"NVM_DIR does not respect XDG_DATA_HOME in {shell_name}"
+        # Assert canonical XDG sourcing for NVM_DIR
+        assert 'export NVM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvm"' in content, (
+            f"canonical NVM_DIR XDG definition missing in {shell_name}"
         )
-        assert "$HOME/.nvm" in content, f"missing legacy ~/.nvm check in {shell_name}"
+        assert '[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"' in content, (
+            f"canonical nvm.sh sourcing missing in {shell_name}"
+        )
+        assert '[ -s "$NVM_DIR/bash_completion" ] && \\. "$NVM_DIR/bash_completion"' in content, (
+            f"canonical bash_completion sourcing missing in {shell_name}"
+        )
 
-        # Assert nvm.sh sourcing when present
-        assert "nvm.sh" in content, f"missing nvm.sh sourcing logic in {shell_name}"
-
-        # Assert nvm current binary path or ~/.local/bin is included in PATH
+        # Assert NVM current binary path and ~/.local/bin precedence re-assertion after Homebrew
         assert "$HOME/.local/bin" in content, f"missing ~/.local/bin PATH inclusion in {shell_name}"
-        assert "$NVM_DIR/current/bin" in content or "$XDG_DATA_HOME/nvm/current/bin" in content, (
+        assert "$NVM_DIR/current/bin" in content, (
             f"missing nvm current/bin PATH inclusion in {shell_name}"
+        )
+        # Ensure NVM precedence re-assertion appears after Homebrew evaluation
+        brew_idx = content.find("brew shellenv")
+        nvm_precedence_idx = content.find('export PATH="$NVM_DIR/current/bin:$PATH"')
+        assert brew_idx != -1 and nvm_precedence_idx != -1 and nvm_precedence_idx > brew_idx, (
+            f"NVM path precedence must be re-asserted after Homebrew evaluation in {shell_name}"
         )
 
 
 def test_multishell_conda_and_homebrew_parity() -> None:
-    """Ensure Bash and Zsh dotfiles evaluate Homebrew shellenv and Conda hooks."""
+    """Ensure Bash and Zsh dotfiles evaluate Homebrew shellenv with path guards and Conda hooks."""
     bashrc = read(REPO_ROOT / "dotfiles" / "bash" / ".bashrc")
     zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
 
     for shell_name, content in [("bash", bashrc), ("zsh", zshrc)]:
-        # Multi-OS Homebrew evaluation
+        # Multi-OS Homebrew evaluation guarded when /opt/homebrew/bin is already on PATH
         assert "brew shellenv" in content, f"missing brew shellenv in {shell_name}"
         assert "/opt/homebrew/bin/brew" in content, f"missing Apple Silicon brew path in {shell_name}"
+        assert '*":/opt/homebrew/bin:"*' in content, (
+            f"missing /opt/homebrew/bin PATH guard in {shell_name}"
+        )
 
         # Conda probe and hook evaluation logic
         assert "miniforge3" in content, f"missing miniforge3 probe in {shell_name}"
 
     assert "shell.bash hook" in bashrc, "missing conda shell.bash hook in bashrc"
     assert "shell.zsh hook" in zshrc, "missing conda shell.zsh hook in zshrc"
+
+
+def test_makefile_bootstrap_next_step_conditional() -> None:
+    """Makefile bootstrap target conditionally prints next-step advice only when directly targeted."""
+    makefile = read(REPO_ROOT / "Makefile")
+    assert "ifeq ($(MAKECMDGOALS),bootstrap)" in makefile, (
+        "Makefile must conditionally guard next-step advice with ifeq ($(MAKECMDGOALS),bootstrap)"
+    )
+    assert "Run 'make install' or 'make check-mode' next." in makefile
 
 
 def test_node_role_symlinks_and_multishell_assertions() -> None:

@@ -21,8 +21,32 @@ set -gx devenv_arch (uname -m)
 
 # --- nvm.fish: XDG-based node state + pinned default ------------------------
 set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"
-set -gx nvm_data "$XDG_DATA_HOME/nvm"
+set -g nvm_data $XDG_DATA_HOME/nvm/versions/node
 set -gx nvm_mirror https://nodejs.org/dist
 set -g  nvm_default_version $devenv_node_default_version
+
+# Ensure unified version directory exists and maintain symlink parity with legacy paths
+if test -d "$XDG_DATA_HOME/nvm"
+    test -d "$XDG_DATA_HOME/nvm/versions/node" || mkdir -p "$XDG_DATA_HOME/nvm/versions/node"
+    # Legacy ~/.local/share/nvm/v* -> unified ~/.local/share/nvm/versions/node/v*
+    for legacy_ver in (command find "$XDG_DATA_HOME/nvm" -maxdepth 1 -name "v*" 2>/dev/null)
+        if test -d "$legacy_ver"
+            set -l vname (basename "$legacy_ver")
+            if not test -e "$XDG_DATA_HOME/nvm/versions/node/$vname"
+                ln -s "$legacy_ver" "$XDG_DATA_HOME/nvm/versions/node/$vname"
+            end
+        end
+    end
+    # Unified ~/.local/share/nvm/versions/node/v* -> legacy ~/.local/share/nvm/v* fallback
+    for node_ver in (command find "$XDG_DATA_HOME/nvm/versions/node" -maxdepth 1 -name "v*" 2>/dev/null)
+        if test -d "$node_ver"
+            set -l vname (basename "$node_ver")
+            if not test -e "$XDG_DATA_HOME/nvm/$vname"
+                ln -s "$node_ver" "$XDG_DATA_HOME/nvm/$vname"
+            end
+        end
+    end
+end
+
 fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"
 
