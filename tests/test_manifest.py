@@ -785,3 +785,21 @@ def test_read_only_probe_tasks_check_mode() -> None:
     assert neovim_probe.get("check_mode") is False, "Neovim version probe task must have check_mode: false"
 
 
+def test_login_shell_and_gui_casks_defaults(group_vars) -> None:
+    """Verify group_vars/all.yml defaults and ensure devenv_wizard.py defaults match."""
+    assert group_vars["devenv_set_login_shell"] is True, "devenv_set_login_shell must default to true"
+    assert group_vars["devenv_install_gui_casks"] is True, "devenv_install_gui_casks must default to true"
+
+    wizard_src = read(REPO_ROOT / "scripts" / "devenv_wizard.py")
+    assert 'existing_choices.get("devenv_set_login_shell", True)' in wizard_src
+    assert 'existing_choices.get("devenv_install_gui_casks", True)' in wizard_src
+
+
+def test_fish_nvm_path_resolution_in_conf_d() -> None:
+    """00-devenv.fish must define XDG_DATA_HOME fallback and prepend nvm node bin to PATH."""
+    content = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    assert 'set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"' in content
+    assert 'fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"' in content
+
+
+

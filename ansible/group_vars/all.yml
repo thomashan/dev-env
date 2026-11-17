@@ -62,8 +62,8 @@ devenv_supported_backends:
 
 # --- feature flags ----------------------------------------------------------
 devenv_install_homebrew: true      # Darwin only; needs interactive sudo
-devenv_install_gui_casks: false    # browsers, Docker Desktop, IDEs, ...
-devenv_set_login_shell: false      # opt-in: chsh to fish (make login-shell)
+devenv_install_gui_casks: true     # browsers, Docker Desktop, IDEs, ...
+devenv_set_login_shell: true       # opt-in: chsh to fish (make login-shell)
 devenv_remove_unmanaged: false     # opt-in: purge packages in devenv_packages_remove
 devenv_backup_dotfiles: true
 

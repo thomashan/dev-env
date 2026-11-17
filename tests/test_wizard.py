@@ -7,6 +7,7 @@ YAML fallback serialization, and non-interactive execution.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -302,6 +303,8 @@ def test_run_wizard_non_interactive(tmp_path):
     assert (choices_file.stat().st_mode & 0o777) == 0o644
     assert choices["devenv_selected_variants"]["nvim"] == "kickstart"
     assert "nvim-kickstart" in choices["devenv_stow_packages"]
+    assert choices["devenv_set_login_shell"] is True
+    assert choices["devenv_install_gui_casks"] is True
     assert choices["devenv_python_version"] == "3.13"
     assert choices["devenv_conda_env_python"] == "3.13"
 
@@ -358,3 +361,43 @@ def test_main_cli_entrypoint(tmp_path):
     ])
     assert rc == 0
     assert choices_file.exists()
+
+
+def test_wizard_prompts_have_no_step_letter_prefixes(tmp_path, monkeypatch):
+    """Interactive wizard prompts must not display Step [A-Z]: letter prefixes."""
+    repo_root = tmp_path / "repo"
+    home_dir = tmp_path / "home"
+    choices_file = home_dir / ".config" / "dev-env" / "choices.yml"
+
+    dotfiles = repo_root / "dotfiles"
+    (dotfiles / "bash").mkdir(parents=True)
+    (dotfiles / "nvim-kickstart").mkdir(parents=True)
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr("platform.machine", lambda: "arm64")
+
+    prompts_called: list[str] = []
+
+    def mock_prompt(prompt_str, default=None, interactive=True):
+        prompts_called.append(prompt_str)
+        return default or ""
+
+    with patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt):
+        run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=choices_file,
+            interactive=True,
+        )
+
+    assert prompts_called, "wizard should have displayed interactive prompts"
+    step_prefix_pattern = re.compile(r"Step [A-Z]:")
+    for prompt in prompts_called:
+        assert not step_prefix_pattern.search(prompt), f"Prompt contains step letter prefix: {prompt!r}"
+
+    # Also statically verify wizard source code for non-comment lines
+    wizard_src = (Path(__file__).resolve().parent.parent / "scripts" / "devenv_wizard.py").read_text(encoding="utf-8")
+    code_lines = [line for line in wizard_src.splitlines() if not line.strip().startswith("#")]
+    for line in code_lines:
+        assert not step_prefix_pattern.search(line), f"Wizard code contains 'Step [A-Z]:': {line}"
+

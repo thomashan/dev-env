@@ -20,7 +20,9 @@ end
 set -gx devenv_arch (uname -m)
 
 # --- nvm.fish: XDG-based node state + pinned default ------------------------
-set -gx nvm_data "$HOME/.local/share/nvm"
+set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"
+set -gx nvm_data "$XDG_DATA_HOME/nvm"
 set -gx nvm_mirror https://nodejs.org/dist
 set -g  nvm_default_version $devenv_node_default_version
+fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"
 
