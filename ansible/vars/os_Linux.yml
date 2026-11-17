@@ -7,3 +7,11 @@ devenv_brew_taps: []
 
 # Neovim source for this platform (see comment in group_vars/all.yml)
 devenv_neovim_source: github
+
+# Linux Conda / Micromamba prefix default resolution
+devenv_conda_dir: >-
+  {{
+    ansible_facts.env.MAMBA_ROOT_PREFIX
+    if (ansible_facts.env.MAMBA_ROOT_PREFIX is defined and (ansible_facts.env.MAMBA_ROOT_PREFIX | length > 0))
+    else (devenv_home ~ '/miniforge3')
+  }}
