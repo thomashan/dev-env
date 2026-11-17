@@ -828,7 +828,7 @@ def test_fish_nvm_path_resolution_in_conf_d() -> None:
     assert 'set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"' in content
     assert "set -g nvm_data $XDG_DATA_HOME/nvm/versions/node" in content
     assert "$XDG_DATA_HOME/nvm/versions/node" in content
-    assert "ln -s" in content
+    assert "ln -sfn" in content
     assert 'fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"' in content
 
 
@@ -859,6 +859,12 @@ def test_multishell_nvm_and_node_parity() -> None:
         nvm_precedence_idx = content.find('export PATH="$NVM_DIR/current/bin:$PATH"')
         assert brew_idx != -1 and nvm_precedence_idx != -1 and nvm_precedence_idx > brew_idx, (
             f"NVM path precedence must be re-asserted after Homebrew evaluation in {shell_name}"
+        )
+        assert '":$NVM_DIR/current/bin:"*' in content, (
+            f"NVM precedence check must include leading colon in {shell_name}"
+        )
+        assert '":$HOME/.local/bin:"*' in content, (
+            f"local/bin precedence check must include leading colon in {shell_name}"
         )
 
 

@@ -33,7 +33,8 @@ if test -d "$XDG_DATA_HOME/nvm"
         if test -d "$legacy_ver"
             set -l vname (basename "$legacy_ver")
             if not test -e "$XDG_DATA_HOME/nvm/versions/node/$vname"
-                ln -s "$legacy_ver" "$XDG_DATA_HOME/nvm/versions/node/$vname"
+                test -L "$XDG_DATA_HOME/nvm/versions/node/$vname"; and command rm -f "$XDG_DATA_HOME/nvm/versions/node/$vname"
+                ln -sfn "$legacy_ver" "$XDG_DATA_HOME/nvm/versions/node/$vname"
             end
         end
     end
@@ -42,7 +43,8 @@ if test -d "$XDG_DATA_HOME/nvm"
         if test -d "$node_ver"
             set -l vname (basename "$node_ver")
             if not test -e "$XDG_DATA_HOME/nvm/$vname"
-                ln -s "$node_ver" "$XDG_DATA_HOME/nvm/$vname"
+                test -L "$XDG_DATA_HOME/nvm/$vname"; and command rm -f "$XDG_DATA_HOME/nvm/$vname"
+                ln -sfn "$node_ver" "$XDG_DATA_HOME/nvm/$vname"
             end
         end
     end

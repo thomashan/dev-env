@@ -55,14 +55,14 @@ export NVM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvm"
 # Re-assert NVM current bin and ~/.local/bin precedence ahead of Homebrew
 if [ -d "$NVM_DIR/current/bin" ]; then
     case ":$PATH:" in
-        "$NVM_DIR/current/bin:"*) ;;
+        ":$NVM_DIR/current/bin:"*) ;;
         *) export PATH="$NVM_DIR/current/bin:$PATH" ;;
     esac
 fi
 
 if [ -d "$HOME/.local/bin" ]; then
     case ":$PATH:" in
-        "$HOME/.local/bin:"*) ;;
+        ":$HOME/.local/bin:"*) ;;
         *) export PATH="$HOME/.local/bin:$PATH" ;;
     esac
 fi
