@@ -13,13 +13,36 @@
 
 SELF_DIR := $(patsubst %/,%,$(dir $(realpath $(firstword $(MAKEFILE_LIST)))))
 
-CONDA_DIR   ?= $(shell if command -v conda >/dev/null 2>&1; then conda info --base 2>/dev/null; elif [ -d /opt/homebrew/Caskroom/miniforge/base ]; then echo /opt/homebrew/Caskroom/miniforge/base; elif [ -d /usr/local/Caskroom/miniforge/base ]; then echo /usr/local/Caskroom/miniforge/base; elif [ -d $(HOME)/miniforge3 ]; then echo $(HOME)/miniforge3; elif [ -d /opt/homebrew ]; then echo /opt/homebrew/Caskroom/miniforge/base; elif [ "$$(uname -s)" = "Darwin" ]; then echo /usr/local/Caskroom/miniforge/base; else echo $(HOME)/miniforge3; fi)
-CONDA       ?= $(shell command -v conda 2>/dev/null || echo $(CONDA_DIR)/bin/conda)
+export PATH := /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/home/linuxbrew/.linuxbrew/bin:$(HOME)/.linuxbrew/bin:$(PATH)
+
+CONDA       ?= $(shell if command -v conda >/dev/null 2>&1; then command -v conda; \
+	elif [ -x /opt/homebrew/bin/conda ]; then echo /opt/homebrew/bin/conda; \
+	elif [ -x /usr/local/bin/conda ]; then echo /usr/local/bin/conda; \
+	elif [ -x /opt/homebrew/Caskroom/miniforge/base/condabin/conda ]; then echo /opt/homebrew/Caskroom/miniforge/base/condabin/conda; \
+	elif [ -x /opt/homebrew/Caskroom/miniforge/base/bin/conda ]; then echo /opt/homebrew/Caskroom/miniforge/base/bin/conda; \
+	elif [ -x /home/linuxbrew/.linuxbrew/bin/conda ]; then echo /home/linuxbrew/.linuxbrew/bin/conda; \
+	elif [ -x "$$HOME/.linuxbrew/bin/conda" ]; then echo "$$HOME/.linuxbrew/bin/conda"; \
+	elif [ -x "$(HOME)/miniforge3/bin/conda" ]; then echo "$(HOME)/miniforge3/bin/conda"; \
+	else echo "$(HOME)/miniforge3/bin/conda"; fi)
+CONDA_DIR   ?= $(shell if [ -x "$(CONDA)" ]; then base=$$("$(CONDA)" info --base 2>/dev/null); elif command -v conda >/dev/null 2>&1; then base=$$(conda info --base 2>/dev/null); fi; \
+	if [ -n "$$base" ] && [ -d "$$base" ]; then echo "$$base"; \
+	elif [ -d /opt/homebrew/Caskroom/miniforge/base ]; then echo /opt/homebrew/Caskroom/miniforge/base; \
+	elif [ -d /usr/local/Caskroom/miniforge/base ]; then echo /usr/local/Caskroom/miniforge/base; \
+	elif [ -d "$(HOME)/miniforge3" ]; then echo "$(HOME)/miniforge3"; \
+	elif [ -d /opt/homebrew ]; then echo /opt/homebrew/Caskroom/miniforge/base; \
+	elif [ "$$(uname -s)" = "Darwin" ]; then echo /usr/local/Caskroom/miniforge/base; \
+	else echo "$(HOME)/miniforge3"; fi)
 DEVENV_HOME := $(HOME)/.local/share/dev-env
 COLLECTIONS := $(DEVENV_HOME)/collections
-PB          := $(CONDA_DIR)/bin/ansible-playbook
-GALAXY      := $(CONDA_DIR)/bin/ansible-galaxy
-LINT        := $(CONDA_DIR)/bin/ansible-lint
+PB          := $(shell if [ -x "$(CONDA_DIR)/bin/ansible-playbook" ]; then echo "$(CONDA_DIR)/bin/ansible-playbook"; \
+	elif command -v ansible-playbook >/dev/null 2>&1; then command -v ansible-playbook; \
+	else echo "$(CONDA_DIR)/bin/ansible-playbook"; fi)
+GALAXY      := $(shell if [ -x "$(CONDA_DIR)/bin/ansible-galaxy" ]; then echo "$(CONDA_DIR)/bin/ansible-galaxy"; \
+	elif command -v ansible-galaxy >/dev/null 2>&1; then command -v ansible-galaxy; \
+	else echo "$(CONDA_DIR)/bin/ansible-galaxy"; fi)
+LINT        := $(shell if [ -x "$(CONDA_DIR)/bin/ansible-lint" ]; then echo "$(CONDA_DIR)/bin/ansible-lint"; \
+	elif command -v ansible-lint >/dev/null 2>&1; then command -v ansible-lint; \
+	else echo "$(CONDA_DIR)/bin/ansible-lint"; fi)
 SITE        := $(SELF_DIR)/ansible/site.yml
 
 # The target interpreter comes from ansible_playbook_python (see group_vars),
@@ -100,7 +123,7 @@ check:
 		if command -v apt >/dev/null 2>&1; then echo "ok"; else echo "MISSING: apt is required"; err=$$((err+1)); fi;; \
 		*) echo "n/a";; esac; \
 	printf "%-26s " "conda"; \
-	if command -v conda >/dev/null 2>&1 || [ -x "$(CONDA)" ]; then conda_ver=$$("$(CONDA)" --version 2>/dev/null | head -1); echo "ok ($$conda_ver)"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
+	if command -v conda >/dev/null 2>&1 || [ -x "$(CONDA)" ]; then conda_bin="$$(command -v conda 2>/dev/null || echo "$(CONDA)")"; conda_ver=$$("$$conda_bin" --version 2>/dev/null | head -1); echo "ok ($$conda_ver)"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
 	printf "%-26s " "ansible-core"; \
 	if [ -x "$(PB)" ]; then echo "ok"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
 	printf "%-26s " "community.general"; \
@@ -112,21 +135,23 @@ check:
 
 bootstrap:
 	@echo "Bootstrapping Ansible via Conda (GNU Make -> Conda -> Ansible)..."
-	@brew_bin=""; \
-	if [ -x /opt/homebrew/bin/brew ]; then brew_bin="/opt/homebrew/bin/brew"; \
-	elif [ -x /usr/local/bin/brew ]; then brew_bin="/usr/local/bin/brew"; \
-	elif [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then brew_bin="/home/linuxbrew/.linuxbrew/bin/brew"; \
-	elif [ -x "$$HOME/.linuxbrew/bin/brew" ]; then brew_bin="$$HOME/.linuxbrew/bin/brew"; \
-	elif command -v brew >/dev/null 2>&1; then brew_bin="$$(command -v brew)"; fi; \
-	if [ -z "$$brew_bin" ]; then echo "Error: Homebrew (brew) is required." >&2; exit 1; fi; \
-	os="$$(uname -s)"; \
-	case "$$os" in \
-		Linux) \
-			command -v apt >/dev/null 2>&1 || { echo "Error: apt is required on Linux." >&2; exit 1; } ;; \
-		Darwin) ;; \
-		*) echo "Unsupported OS: $$os" >&2; exit 1 ;; \
-	esac; \
-	if ! command -v conda >/dev/null 2>&1 && [ ! -x "$(CONDA)" ]; then \
+	@if [ -x "$(CONDA)" ] || command -v conda >/dev/null 2>&1; then \
+		echo "Using existing Conda at $$(command -v conda 2>/dev/null || echo $(CONDA))..."; \
+	else \
+		brew_bin=""; \
+		if [ -x /opt/homebrew/bin/brew ]; then brew_bin="/opt/homebrew/bin/brew"; \
+		elif [ -x /usr/local/bin/brew ]; then brew_bin="/usr/local/bin/brew"; \
+		elif [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then brew_bin="/home/linuxbrew/.linuxbrew/bin/brew"; \
+		elif [ -x "$$HOME/.linuxbrew/bin/brew" ]; then brew_bin="$$HOME/.linuxbrew/bin/brew"; \
+		elif command -v brew >/dev/null 2>&1; then brew_bin="$$(command -v brew)"; fi; \
+		if [ -z "$$brew_bin" ]; then echo "Error: Homebrew (brew) is required." >&2; exit 1; fi; \
+		os="$$(uname -s)"; \
+		case "$$os" in \
+			Linux) \
+				command -v apt >/dev/null 2>&1 || { echo "Error: apt is required on Linux." >&2; exit 1; } ;; \
+			Darwin) ;; \
+			*) echo "Unsupported OS: $$os" >&2; exit 1 ;; \
+		esac; \
 		echo "Installing Conda via Homebrew..."; \
 		case "$$os" in \
 			Darwin) \
@@ -144,7 +169,11 @@ bootstrap:
 				"$$mamba_bin" create -y -p "$(CONDA_DIR)" -c conda-forge --override-channels conda python=3.13 ansible-core ansible-lint pyyaml || exit 1 ;; \
 		esac; \
 	fi
-	@"$(CONDA)" install -y -c conda-forge --override-channels python=3.13 ansible-core ansible-lint pyyaml || exit 1
+	@if [ -x "$(PB)" ]; then \
+		echo "Using existing Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"; \
+	else \
+		"$(CONDA)" install -y -c conda-forge --override-channels ansible-core ansible-lint pyyaml || exit 1; \
+	fi
 	@mkdir -p "$(DEVENV_HOME)" "$(COLLECTIONS)"
 	@test -x "$(PB)" || { echo "bootstrap: $(PB) is missing or not executable"; exit 1; }
 	@if [ -d "$(COLLECTIONS)/ansible_collections/community/general" ]; then \

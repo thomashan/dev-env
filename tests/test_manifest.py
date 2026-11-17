@@ -393,9 +393,9 @@ def test_makefile_no_shims_and_direct_conda_bins():
     assert "uv tool install" not in makefile
     assert "BIN :=" not in makefile
     assert "ln -sfn" not in makefile
-    assert "PB          := $(CONDA_DIR)/bin/ansible-playbook" in makefile
-    assert "GALAXY      := $(CONDA_DIR)/bin/ansible-galaxy" in makefile
-    assert "LINT        := $(CONDA_DIR)/bin/ansible-lint" in makefile
+    assert "$(CONDA_DIR)/bin/ansible-playbook" in makefile
+    assert "$(CONDA_DIR)/bin/ansible-galaxy" in makefile
+    assert "$(CONDA_DIR)/bin/ansible-lint" in makefile
 
 
 def test_makefile_check_probes_prerequisites_strictly():
@@ -608,4 +608,38 @@ def test_makefile_bootstrap_guards_collections_and_omits_force():
     assert "--force" not in bootstrap_target, "--force must not be used in collection install"
 
 
+def test_makefile_exports_extended_path() -> None:
+    """Makefile must export extended PATH covering Homebrew and Linuxbrew prefixes."""
+    makefile = read(REPO_ROOT / "Makefile")
+    assert "export PATH :=" in makefile
+    path_line = next(line for line in makefile.splitlines() if line.startswith("export PATH :="))
+    for expected in [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/home/linuxbrew/.linuxbrew/bin",
+        "$(HOME)/.linuxbrew/bin",
+        "$(PATH)",
+    ]:
+        assert expected in path_line, f"export PATH line missing {expected}"
 
+
+def test_makefile_skips_conda_and_ansible_if_present() -> None:
+    """Bootstrap recipe must inspect existing Conda and PB before running installs."""
+    makefile = read(REPO_ROOT / "Makefile")
+    bootstrap_target = makefile.split("bootstrap:")[1].split("configure:")[0]
+    assert "Using existing Conda at" in bootstrap_target
+    assert "Using existing Ansible:" in bootstrap_target
+    assert '[ -x "$(CONDA)" ]' in bootstrap_target or "command -v conda" in bootstrap_target
+    assert '[ -x "$(PB)" ]' in bootstrap_target
+
+
+def test_makefile_conda_install_does_not_force_python_downgrade() -> None:
+    """Conda install command in Makefile must not pin python=3.13 into existing env."""
+    makefile = read(REPO_ROOT / "Makefile")
+    bootstrap_target = makefile.split("bootstrap:")[1].split("configure:")[0]
+    for line in bootstrap_target.splitlines():
+        if '"$(CONDA)" install' in line or "$$(CONDA) install" in line:
+            assert "python=" not in line, f"Conda install in bootstrap forces python version: {line}"
+            assert "ansible-core" in line
+            assert "ansible-lint" in line
+            assert "pyyaml" in line
