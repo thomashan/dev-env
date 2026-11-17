@@ -191,11 +191,13 @@ def test_wizard_default_node_version_matches_fish_pin():
 
 
 def test_node_bin_is_first_on_path():
-    """This host had three node binaries; nvm must win over ~/.local/bin."""
+    """This host had three node binaries; nvm must win over ~/.local/bin and Homebrew."""
     fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
     nvm = fish_cfg.index("nvm/current/bin")
-    local = fish_cfg.index('$HOME/.local/bin')
-    assert nvm < local, "nvm's node must be prepended before ~/.local/bin"
+    brew = fish_cfg.index("brew shellenv")
+    local = fish_cfg.index("$HOME/.local/bin")
+    assert brew < nvm, "nvm path addition must occur after brew shellenv so nvm-managed node wins on PATH"
+    assert local < nvm, "nvm's node must be prepended after ~/.local/bin"
     assert "-gpPm" in fish_cfg, "nvm path must use prepend (-p) so it wins over $fish_user_paths"
 
 

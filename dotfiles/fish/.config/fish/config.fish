@@ -23,12 +23,6 @@ if status is-interactive
 end
 
 # --- PATH ------------------------------------------------------------------
-# nvm must come first: this host had three node binaries (brew node 26,
-# ~/.local/bin/node -> ~/.hermes/node 22, nvm 24) and nvm is the one we manage.
-# -g global, -p prepend, -P edit $PATH directly (not $fish_user_paths),
-# -m move an existing entry to the front instead of leaving it stale.
-fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"   # nvm-managed node (see ansible node role)
-
 fish_add_path -gaP "$HOME/.local/bin"                  # uv / pipx / user tools
 
 switch "$devenv_os"
@@ -44,6 +38,15 @@ switch "$devenv_os"
             test -d "$dir"; and fish_add_path -gaP "$dir"
         end
 end
+
+# nvm must come first: this host had three node binaries (brew node 26,
+# ~/.local/bin/node -> ~/.hermes/node 22, nvm 24) and nvm is the one we manage.
+# Because `brew shellenv` calls `fish_add_path --global --move --path "/opt/homebrew/bin" "/opt/homebrew/sbin"`,
+# it moves Homebrew paths to the front. Running `fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"`
+# after `brew shellenv` guarantees nvm-managed node is at the absolute front of $PATH.
+# -g global, -p prepend, -P edit $PATH directly (not $fish_user_paths),
+# -m move an existing entry to the front instead of leaving it stale.
+fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"   # nvm-managed node (see ansible node role)
 
 # --- conda (miniforge): location differs per OS, so probe instead of hardcode
 set -l conda_candidates \
