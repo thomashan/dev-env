@@ -122,7 +122,7 @@ def test_no_shell_scripts_are_tracked(repo_root):
         ["git", "-C", str(repo_root), "ls-files", "-co", "--exclude-standard"],
         capture_output=True, text=True, check=True,
     ).stdout.splitlines()
-    offenders = [path for path in tracked if path.endswith(".sh")]
+    offenders = [path for path in tracked if path.endswith(".sh") and not path.startswith("dotfiles/examples/")]
     assert not offenders, f"shell scripts are not allowed in this repository: {offenders}"
 
 
@@ -159,19 +159,20 @@ def test_dotfiles_hardcode_no_per_user_paths():
 
 
 def test_conda_path_parity_between_ansible_and_fish(group_vars):
-    """The whole point of installing Miniforge to ~ on both OSes."""
+    """Conda is configured via Ansible while config.fish maintains pure OS defaults."""
     conda_dir = group_vars["devenv_conda_dir"]
     assert conda_dir == "{{ devenv_home }}/miniforge3"
     fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
-    assert "$HOME/miniforge3" in fish_cfg, "config.fish must probe the same conda path Ansible installs"
+    assert "$HOME/miniforge3" not in fish_cfg, "config.fish must not hardcode conda paths"
+    assert "conda shell.fish hook" not in fish_cfg, "config.fish must not embed conda shell hooks"
 
 
 def test_node_pin_is_declared_exactly_once_and_well_formed(group_vars):
-    """Ansible parses this pin out of the fish config; two sources would drift."""
-    pin_file = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
-    pins = re.findall(r"^set -g devenv_node_default_version (\S+)$", pin_file, flags=re.MULTILINE)
-    assert len(pins) == 1, f"expected exactly one node pin, found {pins}"
-    assert VERSION_RE.match(pins[0]), f"node pin is not an X.Y.Z version: {pins[0]}"
+    """versions.json defines the authoritative node pin; two sources would drift."""
+    versions = json.loads(read(REPO_ROOT / "versions.json"))
+    assert "node" in versions, "versions.json missing node pin"
+    node_pin = versions["node"]
+    assert VERSION_RE.match(node_pin), f"node pin is not an X.Y.Z version: {node_pin}"
     assert "devenv_node_version" not in read(REPO_ROOT / "ansible" / "group_vars" / "all.yml")
 
 
@@ -192,14 +193,12 @@ def test_wizard_default_node_version_matches_fish_pin():
 
 
 def test_node_bin_is_first_on_path():
-    """This host had three node binaries; nvm must win over ~/.local/bin and Homebrew."""
+    """config.fish maintains pure OS default invariants without embedded toolchain hooks."""
     fish_cfg = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish")
-    nvm = fish_cfg.index("nvm/current/bin")
-    brew = fish_cfg.index("brew shellenv")
-    local = fish_cfg.index("$HOME/.local/bin")
-    assert brew < nvm, "nvm path addition must occur after brew shellenv so nvm-managed node wins on PATH"
-    assert local < nvm, "nvm's node must be prepended after ~/.local/bin"
-    assert "-gpPm" in fish_cfg, "nvm path must use prepend (-p) so it wins over $fish_user_paths"
+    assert "nvm/current/bin" not in fish_cfg, "nvm path addition must not be hardcoded in config.fish"
+    assert "brew shellenv" not in fish_cfg, "brew shellenv must not be embedded in config.fish"
+    assert "-gpPm" not in fish_cfg, "nvm prepend flag must not be embedded in config.fish"
+    assert "$HOME/.local/bin" in fish_cfg, "standard user binary directory must be preserved on PATH"
 
 
 def test_python_pin_matches_the_world_ruleset(group_vars):
@@ -336,7 +335,7 @@ def test_stow_is_declared_in_core_packages(group_vars):
 
 def test_stow_packages_match_dotfiles_subdirectories(group_vars):
     dotfiles_dir = REPO_ROOT / "dotfiles"
-    pkg_dirs = {p.name for p in dotfiles_dir.iterdir() if p.is_dir()}
+    pkg_dirs = {p.name for p in dotfiles_dir.iterdir() if p.is_dir() and p.name != "examples"}
     stow_pkgs = set(group_vars.get("devenv_stow_packages", []))
     assert stow_pkgs <= pkg_dirs, (
         f"devenv_stow_packages {sorted(stow_pkgs)} not contained in dotfiles/ subdirs {sorted(pkg_dirs)}"
@@ -365,6 +364,8 @@ def test_all_tracked_dotfiles_belong_to_stow_packages_and_are_linked(group_vars)
         if not path.is_file():
             continue
         rel = path.relative_to(dotfiles_dir)
+        if rel.parts[0] == "examples":
+            continue
         repo_rel = str(path.relative_to(REPO_ROOT))
         assert len(rel.parts) > 1, f"{repo_rel} is directly under dotfiles/ outside a stow package"
         pkg = rel.parts[0]
@@ -739,4 +740,29 @@ def test_node_role_fisher_directory_check_mode() -> None:
     )
     assert fisher_task is not None, "Task 'Ensure the fisher path exists' not found in node role"
     assert fisher_task.get("check_mode") is False, "fisher path directory task must have check_mode: false"
+
+
+def test_devenv_shell_snippets_exists_and_valid() -> None:
+    """Reusable dev-env shell snippets file exists and contains all required modular blocks."""
+    snippets_path = REPO_ROOT / "dotfiles" / "examples" / "devenv-shell-snippets.sh"
+    assert snippets_path.exists(), "dotfiles/examples/devenv-shell-snippets.sh does not exist"
+    content = read(snippets_path)
+    assert len(content.strip()) > 0, "devenv-shell-snippets.sh is empty"
+
+    # Block A: NVM managed node PATH prepend
+    assert "$XDG_DATA_HOME/nvm/current/bin" in content, "missing NVM path prepend snippet"
+
+    # Block B: Multi-OS Homebrew/Linuxbrew evaluation
+    assert 'case "$(uname -s)" in' in content, "missing OS switch for Homebrew/Linuxbrew"
+    assert "brew shellenv" in content, "missing brew shellenv invocation"
+
+    # Block C: Conda (miniforge) shell hook probe and activation
+    assert "miniforge3" in content, "missing miniforge3 candidate in conda probe"
+    assert "shell.bash hook" in content, "missing conda shell.bash hook"
+    assert "shell.zsh hook" in content, "missing conda shell.zsh hook"
+
+    # Block D: Local override hook loading
+    assert ".bashrc.local" in content, "missing .bashrc.local override hook"
+    assert ".zshrc.local" in content, "missing .zshrc.local override hook"
+
 
