@@ -57,9 +57,8 @@
         that:
           - item.stat.islnk | default(false)
           - >-
-            ((item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
-              else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath)
-            startswith devenv_repo_root
+            (((item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
+              else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath).startswith(devenv_repo_root))
         fail_msg: "{{ item.item.dest }} exists but is not a symlink into {{ devenv_repo_root }}; refusing to delete."
         quiet: true
       loop: "{{ devenv_unlink_stat.results }}"

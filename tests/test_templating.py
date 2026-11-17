@@ -32,6 +32,16 @@ def task(role: str, name_fragment: str) -> dict:
     raise AssertionError(f"no task matching {name_fragment!r} in roles/{role}")
 
 
+def playbook_task(playbook: str, name_fragment: str) -> dict:
+    """Find a task inside a playbook by a fragment of its name."""
+    path = REPO_ROOT / "ansible" / "playbooks" / playbook
+    for play in yaml.safe_load(read(path)):
+        for task_def in play.get("tasks", []):
+            if name_fragment in task_def.get("name", ""):
+                return task_def
+    raise AssertionError(f"no task matching {name_fragment!r} in playbooks/{playbook}")
+
+
 def set_fact_expression(role: str, name_fragment: str, key: str) -> str:
     fact_key = f"ansible.builtin.set_fact.{key}"
     found = task(role, name_fragment)
@@ -220,3 +230,86 @@ def test_miniforge_installer_names_exist_upstream(group_vars, system, arch):
     request = urllib.request.Request(url, method="HEAD")
     with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310 - fixed upstream host
         assert response.status == 200, f"{url} -> {response.status}"
+
+
+def test_dotfiles_symlink_assertion_expression(templar):
+    expr = task("dotfiles", "Assert the link manifest is fully satisfied")["ansible.builtin.assert"]["that"][1]
+    repo_root_str = str(REPO_ROOT)
+    vars_inside_abs = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": f"{repo_root_str}/dotfiles/tmux"},
+            "item": {"dest": "/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_inside_abs) is True
+
+    vars_inside_rel = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "../tmux"},
+            "item": {"dest": f"{repo_root_str}/dotfiles/other/dest"},
+        },
+    }
+    assert templar(expr, vars_inside_rel) is True
+
+    vars_outside_abs = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "/etc/passwd"},
+            "item": {"dest": "/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_outside_abs) is False
+
+    vars_outside_rel = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "../../../etc/passwd"},
+            "item": {"dest": "/tmp/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_outside_rel) is False
+
+
+def test_unlink_symlink_assertion_expression(templar):
+    expr = playbook_task("unlink.yml", "Refuse to remove anything that is not our symlink")["ansible.builtin.assert"][
+        "that"
+    ][1]
+    repo_root_str = str(REPO_ROOT)
+    vars_inside_abs = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": f"{repo_root_str}/dotfiles/fish"},
+            "item": {"dest": "/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_inside_abs) is True
+
+    vars_inside_rel = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "../fish"},
+            "item": {"dest": f"{repo_root_str}/dotfiles/other/dest"},
+        },
+    }
+    assert templar(expr, vars_inside_rel) is True
+
+    vars_outside_abs = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "/var/log"},
+            "item": {"dest": "/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_outside_abs) is False
+
+    vars_outside_rel = {
+        "devenv_repo_root": repo_root_str,
+        "item": {
+            "stat": {"lnk_source": "../../var/log"},
+            "item": {"dest": "/tmp/mock/dest"},
+        },
+    }
+    assert templar(expr, vars_outside_rel) is False
+
