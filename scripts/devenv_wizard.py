@@ -403,7 +403,7 @@ def run_wizard(
     chosen_backend = existing_choices.get("devenv_pkg_backend", detected_backend)
     if interactive:
         prompt_msg = (
-            f"Step A: Detected {plat_info['distro']} ({plat_info['machine']}). "
+            f"Detected {plat_info['distro']} ({plat_info['machine']}). "
             f"Package backend"
         )
         ans = prompt_user(prompt_msg, default=chosen_backend, interactive=True)
@@ -420,7 +420,7 @@ def run_wizard(
     nvim_default = selected_variants.get("nvim", "kickstart")
     if interactive:
         nvim_opts = variants.get("nvim", ["kickstart", "minimal", "lazyvim"])
-        prompt_msg = f"Step B: Select Neovim variant ({', '.join(nvim_opts)})"
+        prompt_msg = f"Select Neovim variant ({', '.join(nvim_opts)})"
         ans = prompt_user(prompt_msg, default=nvim_default, interactive=True)
         if ans in nvim_opts:
             selected_variants["nvim"] = ans
@@ -485,8 +485,8 @@ def run_wizard(
                 print("Invalid option. Please enter d, m, l, a, b, or s.")
 
     # --- Step D: Host Feature Flags & Runtime Pins ---
-    set_login_shell = bool(existing_choices.get("devenv_set_login_shell", False))
-    install_gui_casks = bool(existing_choices.get("devenv_install_gui_casks", False))
+    set_login_shell = bool(existing_choices.get("devenv_set_login_shell", True))
+    install_gui_casks = bool(existing_choices.get("devenv_install_gui_casks", True))
     remove_unmanaged = bool(existing_choices.get("devenv_remove_unmanaged", False))
     versions = load_versions()
     py_version = str(existing_choices.get("devenv_python_version", "3.13"))
@@ -498,7 +498,7 @@ def run_wizard(
 
     if interactive:
         ans_shell = prompt_user(
-            "Step D: Change login shell to Fish? (true/false)",
+            "Change login shell to Fish? (true/false)",
             default=str(set_login_shell).lower(),
             interactive=True,
         )
