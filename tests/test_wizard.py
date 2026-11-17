@@ -110,14 +110,78 @@ def test_scan_dotfile_conflicts(tmp_path):
 
 
 def test_format_diff(tmp_path):
+    """Verify format_diff falls back to difflib when external tools are unavailable."""
     src = tmp_path / "src"
     dest = tmp_path / "dest"
     src.write_text("line A\nline B\n", encoding="utf-8")
     dest.write_text("line A\nline C\n", encoding="utf-8")
 
-    diff = format_diff(src, dest)
-    assert "-line C" in diff
-    assert "+line B" in diff
+    with patch("shutil.which", return_value=None):
+        diff = format_diff(src, dest)
+        assert "-line C" in diff
+        assert "+line B" in diff
+
+
+def test_format_diff_delta(tmp_path):
+    """Verify format_diff prioritizes delta when available."""
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.write_text("line A\nline B\n", encoding="utf-8")
+    dest.write_text("line A\nline C\n", encoding="utf-8")
+
+    with patch("shutil.which") as mock_which, patch("subprocess.run") as mock_run:
+        mock_which.side_effect = lambda cmd: "/usr/local/bin/delta" if cmd == "delta" else None
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "delta side-by-side output"
+
+        diff = format_diff(src, dest)
+        assert diff == "delta side-by-side output"
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "delta"
+        assert "--side-by-side" in cmd
+        assert "-w" in cmd
+        assert str(dest) in cmd
+        assert str(src) in cmd
+
+
+def test_format_diff_diff_y(tmp_path):
+    """Verify format_diff falls back to diff -y when delta is absent."""
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.write_text("line A\nline B\n", encoding="utf-8")
+    dest.write_text("line A\nline C\n", encoding="utf-8")
+
+    with patch("shutil.which") as mock_which, patch("subprocess.run") as mock_run:
+        mock_which.side_effect = lambda cmd: "/usr/bin/diff" if cmd == "diff" else None
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stdout = "line C | line B"
+
+        diff = format_diff(src, dest)
+        assert diff == "line C | line B"
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "diff"
+        assert "-y" in cmd
+        assert "-W" in cmd
+        assert str(dest) in cmd
+        assert str(src) in cmd
+
+
+def test_format_diff_handles_subprocess_error(tmp_path):
+    """Verify format_diff falls back to difflib when subprocess raises OSError."""
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    src.write_text("line A\nline B\n", encoding="utf-8")
+    dest.write_text("line A\nline C\n", encoding="utf-8")
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/diff"),
+        patch("subprocess.run", side_effect=OSError("command failed")),
+    ):
+        diff = format_diff(src, dest)
+        assert "-line C" in diff
+        assert "+line B" in diff
 
 
 def test_backup_file(tmp_path):

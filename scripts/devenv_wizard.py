@@ -238,7 +238,35 @@ def scan_dotfile_conflicts(
 
 
 def format_diff(src_path: Path, dest_path: Path) -> str:
-    """Return unified diff between repository package file and home file."""
+    """Return side-by-side or unified diff between repository package file and home file."""
+    cols = shutil.get_terminal_size(fallback=(80, 24)).columns
+
+    if shutil.which("delta"):
+        try:
+            result = subprocess.run(
+                ["delta", "--side-by-side", "-w", str(cols), str(dest_path), str(src_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode in (0, 1) and result.stdout:
+                return result.stdout
+        except OSError:
+            pass
+
+    if shutil.which("diff"):
+        try:
+            result = subprocess.run(
+                ["diff", "-y", "-W", str(cols), str(dest_path), str(src_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode in (0, 1) and result.stdout:
+                return result.stdout
+        except OSError:
+            pass
+
     src_lines = src_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     dest_lines = dest_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     diff = difflib.unified_diff(

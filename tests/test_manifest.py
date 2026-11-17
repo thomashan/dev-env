@@ -597,3 +597,15 @@ def test_nvim_lazyvim_example_starts_with_early_return():
     )
 
 
+def test_makefile_bootstrap_guards_collections_and_omits_force():
+    """Verify Makefile bootstrap target guards galaxy collections and omits --force."""
+    makefile = read(REPO_ROOT / "Makefile")
+    bootstrap_target = makefile.split("\nbootstrap:")[1].split("\nconfigure:")[0]
+    assert "ansible_collections/community/general" in bootstrap_target
+    assert "Ansible collections: ok (already installed in $(COLLECTIONS))" in bootstrap_target
+    assert "ANSIBLE_COLLECTIONS_PATH" in bootstrap_target
+    assert "collection install" in bootstrap_target
+    assert "--force" not in bootstrap_target, "--force must not be used in collection install"
+
+
+
