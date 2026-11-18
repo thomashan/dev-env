@@ -135,6 +135,10 @@
         )
       }}
 
+- name: Set active Conda root alias
+  ansible.builtin.set_fact:
+    devenv_conda_root: "{{ devenv_conda_root | default(devenv_conda_dir) }}"
+
 - name: Record the conda executable
   ansible.builtin.set_fact:
     devenv_conda_bin: >-
@@ -165,6 +169,54 @@
       - devenv_condarc.stat.islnk | default(false)
     fail_msg: "~/.condarc must be the repo-managed symlink; run the dotfiles role first"
     quiet: true
+
+- name: Stat CA certificates directory
+  ansible.builtin.stat:
+    path: /usr/local/share/ca-certificates
+  register: devenv_ca_certs_dir_stat
+  when: ansible_facts['system'] | default(devenv_system) == 'Linux'
+
+- name: Stat Conda cacert bundle
+  ansible.builtin.stat:
+    path: "{{ devenv_conda_root | default(devenv_conda_dir) }}/ssl/cacert.pem"
+  register: devenv_conda_cacert_stat
+  when: ansible_facts['system'] | default(devenv_system) == 'Linux'
+
+- name: Discover custom CA certificates
+  ansible.builtin.find:
+    paths: /usr/local/share/ca-certificates
+    patterns:
+      - "*.crt"
+    file_type: file
+  register: devenv_custom_ca_certs
+  when:
+    - ansible_facts['system'] | default(devenv_system) == 'Linux'
+    - devenv_ca_certs_dir_stat.stat.exists | default(false)
+    - devenv_ca_certs_dir_stat.stat.isdir | default(false)
+    - devenv_conda_cacert_stat.stat.exists | default(false)
+
+- name: Read custom CA certificates
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  register: devenv_custom_ca_contents
+  loop: "{{ devenv_custom_ca_certs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - ansible_facts['system'] | default(devenv_system) == 'Linux'
+    - devenv_custom_ca_certs.matched | default(0) > 0
+
+- name: Inject custom CA certificates into Conda cacert bundle
+  ansible.builtin.blockinfile:
+    path: "{{ devenv_conda_root | default(devenv_conda_dir) }}/ssl/cacert.pem"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: Custom CA {{ (item.item.path | default(item.path | default(''))) | basename }}"
+    block: "{{ item.content | b64decode }}"
+  loop: "{{ (devenv_custom_ca_contents.results | default([])) | selectattr('content', 'defined') | list }}"
+  loop_control:
+    label: "{{ (item.item.path | default(item.path | default(''))) | basename }}"
+  when:
+    - ansible_facts['system'] | default(devenv_system) == 'Linux'
+    - devenv_custom_ca_contents.results is defined
 
 - name: Create conda environments
   ansible.builtin.command:
