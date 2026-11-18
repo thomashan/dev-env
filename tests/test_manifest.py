@@ -520,11 +520,10 @@ def test_package_variants_structure_and_invariants(group_vars):
         assert (pkg_dir / ".config" / "nvim" / "init.lua").is_file(), f"variant {v_name} missing init.lua"
 
 
-def test_tmux_config_uses_the_xdg_path(link_manifest):
+def test_tmux_config_uses_home_tmux_conf(link_manifest):
     dests = [entry["dest"] for entry in link_manifest]
-    assert any(d.endswith(".config/tmux/tmux.conf") for d in dests), (
-        "tmux >= 3.1 reads ~/.config/tmux/tmux.conf; ~/.tmux.conf would be ignored"
-    )
+    assert any(d.endswith(("/.tmux.conf", ".tmux.conf")) for d in dests)
+    assert not any(d.endswith(".config/tmux/tmux.conf") for d in dests)
 
 
 def test_ledger_files_exist_and_are_empty_or_append_only():
@@ -602,7 +601,7 @@ def test_dotfiles_contain_no_personal_paths():
 
 def test_tmux_conf_smart_pane_switching():
     """Verify tmux configuration provides smart pane switching with is_vim process detection."""
-    tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".config" / "tmux" / "tmux.conf")
+    tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".tmux.conf")
     assert "is_vim=" in tmux_conf
     assert "bind-key -n C-h if-shell \"$is_vim\" 'send-keys C-h' 'select-pane -L'" in tmux_conf
     assert "bind-key -n C-j if-shell \"$is_vim\" 'send-keys C-j' 'select-pane -D'" in tmux_conf
