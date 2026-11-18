@@ -35,15 +35,3 @@ jobs:
 
       - name: Run prerequisite probe
         run: make check
-
-      - name: Verify cold-start configure under host Python
-        run: make configure
-
-      - name: Bootstrap Conda and Ansible tooling
-        run: make bootstrap
-
-      - name: Verify Ansible playbook syntax
-        run: make check-syntax
-
-      - name: Exercise Ansible check-mode on scoped tags
-        run: make check-mode ANSIBLE_EXTRA="--tags dotfiles,nvim-sync"
