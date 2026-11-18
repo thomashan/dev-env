@@ -65,3 +65,12 @@ if [ -n "$BASH_VERSION" ]; then
 elif [ -n "$ZSH_VERSION" ]; then
     [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"
 fi
+
+# ----------------------------------------------------------------------------
+# Block E: Go Toolchain Bin PATH Export
+# ----------------------------------------------------------------------------
+# Exports $HOME/go/bin to PATH if the directory exists so user-installed Go
+# binaries are discoverable.
+if [ -d "$HOME/go/bin" ]; then
+    export PATH="$HOME/go/bin:$PATH"
+fi

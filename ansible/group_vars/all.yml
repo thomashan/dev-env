@@ -98,6 +98,7 @@ devenv_packages_core:
   - ncdu
   - delta
   - gh
+  - go
   - aria2
   - autossh
   - iperf3
@@ -191,6 +192,8 @@ devenv_links:
     dest: "{{ devenv_home }}/.config/nvim/lua/kickstart/plugins/lint.lua"
   - src: dotfiles/nvim-kickstart/.config/nvim/lua/kickstart/plugins/neo-tree.lua
     dest: "{{ devenv_home }}/.config/nvim/lua/kickstart/plugins/neo-tree.lua"
+  - src: dotfiles/nvim-kickstart/.config/nvim/lua/kickstart/plugins/tmux_navigator.lua
+    dest: "{{ devenv_home }}/.config/nvim/lua/kickstart/plugins/tmux_navigator.lua"
   - src: dotfiles/tmux/.config/tmux/tmux.conf
     dest: "{{ devenv_home }}/.config/tmux/tmux.conf"
   - src: dotfiles/zsh/.zshrc
