@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-f460a0eb",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-18T04:32:35.149458+00:00",
+  "updated_ts": "2026-11-18T04:32:35.149458+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1794975549-00fc3b11",
+      "ACT-FIND-1794975547-5d6f8600"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794973331-dev-enhancements/P-1794973348-a6487fd8-antigravity-agent-gemini-3.8-flash-medium/E-1794973774-a6a79a4e-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R1-001-01",
+    "symptoms": [
+      "Appending new Go toolchain and Fish tests to tests/test_manifest.py increased file length past 1,000 lines (`983 + 21 = 1004` lines). Extract new test cases into tests/test_toolchain.py to adhere to file size limits."
+    ]
+  }
+}
