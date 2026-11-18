@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-afa58e42",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-18T00:06:56.385946+00:00",
+  "updated_ts": "2026-11-18T00:06:56.385946+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1794959783-089b7171",
+      "ACT-FIND-1794959779-920c1b6f"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794958469-mamba-ansible/P-1794958486-949b3e06-antigravity-agent-gemini-3.8-flash-medium/E-1794958722-b0563861-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-CI-001",
+    "symptoms": [
+      "Findings detected: ['FIND-CI-001', 'FIND-R1-001-01', 'FIND-R2-001-01', 'FIND-R3-001-01']"
+    ]
+  }
+}

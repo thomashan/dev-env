@@ -52,3 +52,24 @@ end
 
 fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"
 
+# --- micromamba discovery and conda alias / hook integration ---
+if not command -q conda
+    if command -q micromamba
+        alias conda=micromamba
+    else if test -x /home/linuxbrew/.linuxbrew/bin/micromamba
+        alias conda=/home/linuxbrew/.linuxbrew/bin/micromamba
+    else if test -x "$HOME/.linuxbrew/bin/micromamba"
+        alias conda="$HOME/.linuxbrew/bin/micromamba"
+    end
+end
+
+if command -q micromamba
+    if set -q MAMBA_ROOT_PREFIX; and test -d "$MAMBA_ROOT_PREFIX"
+        micromamba shell hook --shell fish 2>/dev/null | source
+    else if test -d "$HOME/.local/share/mamba"
+        micromamba shell hook --shell fish 2>/dev/null | source
+    else if test -d "$HOME/micromamba"
+        micromamba shell hook --shell fish 2>/dev/null | source
+    end
+end
+

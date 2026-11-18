@@ -15,30 +15,48 @@
   ansible.builtin.stat:
     path: "{{ item }}"
   register: devenv_conda_candidate_bin_stats
-  loop:
-    - /opt/homebrew/bin/conda
-    - /opt/homebrew/Caskroom/miniforge/base/bin/conda
-    - /opt/homebrew/Caskroom/miniforge/base/condabin/conda
-    - /usr/local/bin/conda
-    - /home/linuxbrew/.linuxbrew/bin/conda
-    - "{{ devenv_home }}/.linuxbrew/bin/conda"
-    - "{{ devenv_home }}/miniforge3/bin/conda"
-    - /opt/conda/bin/conda
+  loop: >-
+    {{
+      [
+        '/opt/homebrew/bin/conda',
+        '/opt/homebrew/Caskroom/miniforge/base/bin/conda',
+        '/opt/homebrew/Caskroom/miniforge/base/condabin/conda',
+        '/usr/local/bin/conda',
+        '/home/linuxbrew/.linuxbrew/bin/conda',
+        devenv_home ~ '/.linuxbrew/bin/conda'
+      ] +
+      ([ansible_facts.env.MAMBA_ROOT_PREFIX ~ '/bin/conda'] if (ansible_facts.env.MAMBA_ROOT_PREFIX is defined and ansible_facts.env.MAMBA_ROOT_PREFIX) else []) +
+      [
+        devenv_home ~ '/.local/share/mamba/bin/conda',
+        devenv_home ~ '/micromamba/bin/conda',
+        devenv_home ~ '/miniforge3/bin/conda',
+        '/opt/conda/bin/conda'
+      ]
+    }}
 
 - name: Stat candidate Conda roots
   ansible.builtin.stat:
     path: "{{ item }}"
   register: devenv_conda_candidate_stats
-  loop:
-    - /opt/homebrew/Caskroom/miniforge/base
-    - /usr/local/Caskroom/miniforge/base
-    - "{{ devenv_home }}/miniforge3"
-    - "{{ devenv_home }}/miniforge"
-    - "{{ devenv_home }}/mambaforge"
-    - "{{ devenv_home }}/miniconda3"
-    - "{{ devenv_home }}/anaconda3"
-    - /opt/miniforge3
-    - /opt/conda
+  loop: >-
+    {{
+      ([ansible_facts.env.MAMBA_ROOT_PREFIX] if (ansible_facts.env.MAMBA_ROOT_PREFIX is defined and ansible_facts.env.MAMBA_ROOT_PREFIX) else []) +
+      [
+        devenv_home ~ '/.local/share/mamba',
+        devenv_home ~ '/micromamba',
+        '/home/linuxbrew/.linuxbrew/opt/micromamba',
+        devenv_home ~ '/.linuxbrew/opt/micromamba',
+        '/opt/homebrew/Caskroom/miniforge/base',
+        '/usr/local/Caskroom/miniforge/base',
+        devenv_home ~ '/miniforge3',
+        devenv_home ~ '/miniforge',
+        devenv_home ~ '/mambaforge',
+        devenv_home ~ '/miniconda3',
+        devenv_home ~ '/anaconda3',
+        '/opt/miniforge3',
+        '/opt/conda'
+      ]
+    }}
 
 - name: Resolve discovered Conda executable
   ansible.builtin.set_fact:

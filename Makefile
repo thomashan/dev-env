@@ -24,6 +24,9 @@ CONDA       ?= $(shell if command -v conda >/dev/null 2>&1; then command -v cond
 	elif [ -x /opt/homebrew/Caskroom/miniforge/base/bin/conda ]; then echo /opt/homebrew/Caskroom/miniforge/base/bin/conda; \
 	elif [ -x /home/linuxbrew/.linuxbrew/bin/conda ]; then echo /home/linuxbrew/.linuxbrew/bin/conda; \
 	elif [ -x "$$HOME/.linuxbrew/bin/conda" ]; then echo "$$HOME/.linuxbrew/bin/conda"; \
+	elif [ -n "$$MAMBA_ROOT_PREFIX" ] && [ -x "$$MAMBA_ROOT_PREFIX/bin/conda" ]; then echo "$$MAMBA_ROOT_PREFIX/bin/conda"; \
+	elif [ -x "$$HOME/.local/share/mamba/bin/conda" ]; then echo "$$HOME/.local/share/mamba/bin/conda"; \
+	elif [ -x "$$HOME/micromamba/bin/conda" ]; then echo "$$HOME/micromamba/bin/conda"; \
 	elif [ -x "$(HOME)/miniforge3/bin/conda" ]; then echo "$(HOME)/miniforge3/bin/conda"; \
 	else echo "$(HOME)/miniforge3/bin/conda"; fi)
 CONDA_DIR   ?= $(shell if [ -x "$(CONDA)" ]; then base=$$("$(CONDA)" info --base 2>/dev/null); elif command -v conda >/dev/null 2>&1; then base=$$(conda info --base 2>/dev/null); fi; \
@@ -33,6 +36,14 @@ CONDA_DIR   ?= $(shell if [ -x "$(CONDA)" ]; then base=$$("$(CONDA)" info --base
 	elif [ -d "$(HOME)/miniforge3" ]; then echo "$(HOME)/miniforge3"; \
 	elif [ -d /opt/homebrew ]; then echo /opt/homebrew/Caskroom/miniforge/base; \
 	elif [ "$$(uname -s)" = "Darwin" ]; then echo /usr/local/Caskroom/miniforge/base; \
+	elif [ "$$(uname -s)" = "Linux" ]; then \
+		if [ -n "$$MAMBA_ROOT_PREFIX" ] && [ -d "$$MAMBA_ROOT_PREFIX" ]; then echo "$$MAMBA_ROOT_PREFIX"; \
+		elif [ -d "$$HOME/.local/share/mamba" ]; then echo "$$HOME/.local/share/mamba"; \
+		elif [ -d "$$HOME/micromamba" ]; then echo "$$HOME/micromamba"; \
+		elif [ -d /home/linuxbrew/.linuxbrew/opt/micromamba ]; then echo /home/linuxbrew/.linuxbrew/opt/micromamba; \
+		elif [ -d "$$HOME/.linuxbrew/opt/micromamba" ]; then echo "$$HOME/.linuxbrew/opt/micromamba"; \
+		elif [ -n "$$MAMBA_ROOT_PREFIX" ]; then echo "$$MAMBA_ROOT_PREFIX"; \
+		else echo "$(HOME)/miniforge3"; fi; \
 	else echo "$(HOME)/miniforge3"; fi)
 DEVENV_HOME := $(HOME)/.local/share/dev-env
 COLLECTIONS := $(DEVENV_HOME)/collections
@@ -68,7 +79,7 @@ ifeq ($(MAKE_OK),0)
 $(error GNU Make >= 3.81 required, found $(MAKE_VERSION))
 endif
 
-.PHONY: help check configure bootstrap install converge check-mode dotfiles nvim-sync fisher \
+.PHONY: help check configure bootstrap install converge check-mode check-syntax dotfiles nvim-sync fisher \
         lint test test-all docs-fmt probe-packages facts login-shell unlink clean-cache doctor
 
 help:
@@ -95,6 +106,7 @@ help:
 	@printf "  %-16s %s\n" "unlink"         "Remove managed symlinks (needs CONFIRM=yes)"
 	@echo ""
 	@echo "Quality:"
+	@printf "  %-16s %s\n" "check-syntax"   "Ansible playbook syntax check"
 	@printf "  %-16s %s\n" "lint"           "ansible-lint over the playbook"
 	@printf "  %-16s %s\n" "test"           "Pytest unit tests for the manifest and role Jinja"
 	@printf "  %-16s %s\n" "test-all"       "unit tests plus the opt-in network asset checks"
@@ -182,7 +194,7 @@ bootstrap:
 		echo "Ansible collections: ok (already installed in $(COLLECTIONS))"; \
 	else \
 		ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
-			-r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
+			-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
 	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"
 ifeq ($(MAKECMDGOALS),bootstrap)
@@ -192,8 +204,10 @@ endif
 configure:
 	@if [ -x "$(CONDA_DIR)/bin/python3" ]; then \
 		"$(CONDA_DIR)/bin/python3" "$(SELF_DIR)/scripts/devenv_wizard.py"; \
+	elif command -v python3 >/dev/null 2>&1; then \
+		python3 "$(SELF_DIR)/scripts/devenv_wizard.py"; \
 	else \
-		echo "Error: Python 3 not found in $(CONDA_DIR)/bin/python3. Run 'make bootstrap' first." >&2; \
+		echo "Error: Python 3 not found in $(CONDA_DIR)/bin/python3 or PATH. Please install python3 or run 'make bootstrap' first." >&2; \
 		exit 1; \
 	fi
 
@@ -209,6 +223,9 @@ converge:
 
 check-mode:
 	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --check --diff $(ANSIBLE_EXTRA)
+
+check-syntax:
+	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --syntax-check $(ANSIBLE_EXTRA)
 
 dotfiles:
 	@command -v stow >/dev/null 2>&1 || { echo "GNU Stow is required for dotfiles management. Run 'make converge' or install stow."; exit 1; }

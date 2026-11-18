@@ -25,8 +25,8 @@ dev = [
 ]
 
 [tool.taskipy.tasks]
-lint = "ruff check ."
-test = "pytest -m 'not network'"
+lint = "uv run --extra test ruff check ."
+test = "uv run --extra test pytest -m 'not network'"
 
 [tool.uv]
 package = false

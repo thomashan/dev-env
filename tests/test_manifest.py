@@ -948,3 +948,4 @@ def test_node_role_symlinks_and_multishell_assertions() -> None:
     assert any("devenv_node_which_bash" in cond for cond in flat_assertions), "missing bash node assertion"
     assert any("devenv_node_which_zsh" in cond for cond in flat_assertions), "missing zsh node assertion"
     assert any("devenv_node_which" in cond for cond in flat_assertions), "missing fish node assertion"
+
