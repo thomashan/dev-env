@@ -70,10 +70,10 @@ devenv_backup_dotfiles: true
 # --- language runtime pins --------------------------------------------------
 devenv_python_version: "3.13"          # pinned Python version
 devenv_conda_env_python: "{{ devenv_python_version }}"
-# Where Neovim comes from: 'package' (brew, current) or 'github' (release
-# tarball, needed on Debian/Ubuntu stable where the packaged build predates
-# vim.pack). Set per OS in ansible/vars/os_*.yml.
-devenv_neovim_source: package
+# Where Neovim comes from: 'brew' (Homebrew / Linuxbrew, current across macOS
+# and Linux to ensure Neovim >= 0.12 with vim.pack support).
+# Set per OS in ansible/vars/os_*.yml.
+devenv_neovim_source: brew
 # Node pin is NOT here on purpose: it lives in
 # dotfiles/fish/.config/fish/conf.d/00-devenv.fish (devenv_node_default_version)
 # so the shell and Ansible can never disagree. The node role reads it from there.

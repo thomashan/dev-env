@@ -63,8 +63,12 @@ def node_pin_expr() -> str:
     return set_fact_expression("node", "Parse the pin", "devenv_node_version")
 
 
+def nvim_brew_expr() -> str:
+    return set_fact_expression("neovim", "Record Homebrew location", "devenv_brew_bin")
+
+
 def nvim_asset_expr() -> str:
-    return set_fact_expression("neovim", "Compute the release asset name", "devenv_nvim_asset")
+    return "nvim-{{ devenv_neovim_asset_os[devenv_system] }}-{{ devenv_neovim_asset_arch[devenv_system][devenv_arch] }}.tar.gz"
 
 
 def test_wanted_list_drops_os_provided_packages(templar, group_vars):
@@ -157,6 +161,32 @@ def test_node_pin_parse_fails_loudly_when_the_line_moves(templar):
     assert templar(guard, {"devenv_node_version": rendered}) is False
 
 
+def test_neovim_brew_lookup_resolution(templar):
+    """Neovim role resolves Homebrew binary location when devenv_brew_bin is unset."""
+    expr = nvim_brew_expr()
+    missing = {"devenv_brew_stat": {"results": [{"stat": {"exists": False}, "item": "/opt/homebrew/bin/brew"}]}}
+    assert templar(expr, missing) == ""
+    found = {
+        "devenv_brew_stat": {
+            "results": [
+                {"stat": {"exists": False}, "item": "/nope/brew"},
+                {"stat": {"exists": True}, "item": "/home/linuxbrew/.linuxbrew/bin/brew"},
+            ]
+        }
+    }
+    assert templar(expr, found) == "/home/linuxbrew/.linuxbrew/bin/brew"
+
+
+def test_neovim_homebrew_install_task_properties(templar):
+    """Neovim install task uses community.general.homebrew conditioned on devenv_neovim_source: brew."""
+    neovim_install = task("neovim", "Install Neovim via Homebrew")
+    assert neovim_install["community.general.homebrew"]["name"] == "neovim"
+    assert neovim_install["community.general.homebrew"]["state"] == "present"
+    condition = neovim_install["when"]
+    assert templar(condition, {"devenv_neovim_source": "brew"}) is True
+    assert templar(condition, {"devenv_neovim_source": "github"}) is False
+
+
 @pytest.mark.parametrize(
     ("system", "arch", "expected"),
     [
@@ -166,8 +196,14 @@ def test_node_pin_parse_fails_loudly_when_the_line_moves(templar):
         ("Linux", "aarch64", "nvim-linux-arm64.tar.gz"),
     ],
 )
-def test_neovim_release_asset_matches_platform(templar, system, arch, expected):
-    assert templar(nvim_asset_expr(), {"devenv_system": system, "devenv_arch": arch}) == expected
+def test_neovim_release_asset_matches_platform(templar, group_vars, system, arch, expected):
+    variables = {
+        "devenv_system": system,
+        "devenv_arch": arch,
+        "devenv_neovim_asset_os": group_vars["devenv_neovim_asset_os"],
+        "devenv_neovim_asset_arch": group_vars["devenv_neovim_asset_arch"],
+    }
+    assert templar(nvim_asset_expr(), variables) == expected
 
 
 def test_brew_lookup_yields_empty_string_when_absent(templar):
