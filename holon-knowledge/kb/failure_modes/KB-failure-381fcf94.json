@@ -1,0 +1,29 @@
+{
+  "kb_id": "KB-failure-381fcf94",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-18T08:20:21.438124+00:00",
+  "updated_ts": "2026-11-18T08:20:21.438124+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1794989467-3d2a9e52",
+      "ACT-REV-1794989466-7c2d9b66"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794988615-nvim-markdownlint/P-1794988632-ef2415b3-antigravity-agent-gemini-3.8-flash-medium/E-1794988768-9b1c802a-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 reviewer 3 completed",
+    "symptoms": []
+  }
+}

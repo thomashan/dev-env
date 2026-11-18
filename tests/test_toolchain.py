@@ -93,3 +93,16 @@ def test_fish_go_path_addition() -> None:
     assert "fish_add_path" in fish_conf, "missing fish_add_path in 00-devenv.fish"
 
 
+def test_nvim_kickstart_markdownlint_auto_install_and_lint_guard() -> None:
+    """Verify kickstart auto-installs markdownlint via mason-tool-installer and guards try_lint."""
+    init_lua = read(REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "init.lua")
+    lint_lua = read(
+        REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "lua" / "kickstart" / "plugins" / "lint.lua"
+    )
+
+    match = re.search(r"vim\.list_extend\(ensure_installed,\s*\{([^}]*)\}\)", init_lua)
+    assert match, "vim.list_extend(ensure_installed, { ... }) not found in kickstart init.lua"
+    assert "'markdownlint'" in match.group(1), "markdownlint not in ensure_installed extension list"
+
+    assert "lint.try_lint(nil, { ignore_errors = true })" in lint_lua
+
