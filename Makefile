@@ -58,6 +58,17 @@ LINT        := $(shell if [ -x "$(CONDA_DIR)/bin/ansible-lint" ]; then echo "$(C
 	else echo "$(CONDA_DIR)/bin/ansible-lint"; fi)
 SITE        := $(SELF_DIR)/ansible/site.yml
 
+# Corporate proxy CA certificate bundle auto-detection across Linux and macOS
+SYSTEM_CA_BUNDLE ?= $(shell if [ -f /etc/ssl/certs/ca-certificates.crt ]; then echo /etc/ssl/certs/ca-certificates.crt; \
+	elif [ -f /etc/pki/tls/certs/ca-bundle.crt ]; then echo /etc/pki/tls/certs/ca-bundle.crt; \
+	elif [ -f /etc/ssl/cert.pem ]; then echo /etc/ssl/cert.pem; fi)
+
+ifneq ($(SYSTEM_CA_BUNDLE),)
+export SSL_CERT_FILE ?= $(SYSTEM_CA_BUNDLE)
+export REQUESTS_CA_BUNDLE ?= $(SYSTEM_CA_BUNDLE)
+export CURL_CA_BUNDLE ?= $(SYSTEM_CA_BUNDLE)
+endif
+
 # The target interpreter comes from ansible_playbook_python (see group_vars),
 # so nothing here has to name an interpreter path -- and the space in
 # ~/Library/Application Support never reaches Ansible.
@@ -142,6 +153,8 @@ check:
 	if [ -x "$(PB)" ]; then echo "ok"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
 	printf "%-26s " "community.general"; \
 	if ls "$(COLLECTIONS)/ansible_collections/community/general" >/dev/null 2>&1; then echo "ok"; else echo "will be installed by make bootstrap"; warn=$$((warn+1)); fi; \
+	printf "%-26s " "system CA bundle"; \
+	if [ -n "$(SYSTEM_CA_BUNDLE)" ]; then echo "ok ($(SYSTEM_CA_BUNDLE))"; else echo "none detected (using default certificate store)"; fi; \
 	echo ""; \
 	if [ $$err -gt 0 ]; then echo "FAILED: $$err critical prerequisite(s) missing."; exit 1; fi; \
 	if [ $$warn -gt 0 ]; then echo "ok: core prerequisites present, $$warn item(s) will be installed by 'make bootstrap'."; \
@@ -193,8 +206,17 @@ bootstrap:
 	@if [ -d "$(COLLECTIONS)/ansible_collections/community/general" ]; then \
 		echo "Ansible collections: ok (already installed in $(COLLECTIONS))"; \
 	else \
-		ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
-			-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
+		if [ "$$DEVENV_INSECURE_SSL" = "true" ]; then \
+			ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install --ignore-certs \
+				-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
+		else \
+			if ! ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
+				-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml"; then \
+				echo "ansible-galaxy collection install failed; retrying with --ignore-certs for proxy SSL fallback..." >&2; \
+				ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install --ignore-certs \
+					-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
+			fi; \
+		fi; \
 	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"
 ifeq ($(MAKECMDGOALS),bootstrap)

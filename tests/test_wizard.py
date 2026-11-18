@@ -16,7 +16,9 @@ import pytest
 from scripts.devenv_wizard import (
     adopt_file,
     backup_file,
+    configure_condarc_ssl_verify,
     detect_platform,
+    detect_system_ca_bundle,
     dump_yaml_fallback,
     extract_local_override,
     format_diff,
@@ -400,4 +402,46 @@ def test_wizard_prompts_have_no_step_letter_prefixes(tmp_path, monkeypatch):
     code_lines = [line for line in wizard_src.splitlines() if not line.strip().startswith("#")]
     for line in code_lines:
         assert not step_prefix_pattern.search(line), f"Wizard code contains 'Step [A-Z]:': {line}"
+
+
+def test_detect_system_ca_bundle(monkeypatch):
+    """Host CA bundle discovery probes Debian, RHEL, and macOS paths in priority order."""
+    # Test Debian bundle
+    monkeypatch.setattr(Path, "exists", lambda self: str(self) == "/etc/ssl/certs/ca-certificates.crt")
+    assert detect_system_ca_bundle() == "/etc/ssl/certs/ca-certificates.crt"
+
+    # Test RHEL bundle
+    monkeypatch.setattr(Path, "exists", lambda self: str(self) == "/etc/pki/tls/certs/ca-bundle.crt")
+    assert detect_system_ca_bundle() == "/etc/pki/tls/certs/ca-bundle.crt"
+
+    # Test macOS cert.pem
+    monkeypatch.setattr(Path, "exists", lambda self: str(self) == "/etc/ssl/cert.pem")
+    assert detect_system_ca_bundle() == "/etc/ssl/cert.pem"
+
+    # Test none found
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+    assert detect_system_ca_bundle() is None
+
+
+def test_configure_condarc_ssl_verify_inject(tmp_path):
+    """Inject ssl_verify into .condarc when absent and CA bundle is available."""
+    condarc = tmp_path / ".condarc"
+    condarc.write_text("channels:\n  - conda-forge\n", encoding="utf-8")
+    result = configure_condarc_ssl_verify(condarc, system_ca_bundle="/etc/ssl/certs/ca-certificates.crt")
+    assert result is True
+    content = condarc.read_text(encoding="utf-8")
+    assert "channels:" in content
+    assert "  - conda-forge" in content
+    assert "ssl_verify: /etc/ssl/certs/ca-certificates.crt" in content
+
+
+def test_configure_condarc_ssl_verify_preserve(tmp_path):
+    """Preserve existing ssl_verify in .condarc without overwriting."""
+    condarc = tmp_path / ".condarc"
+    original = "channels:\n  - conda-forge\nssl_verify: /custom/cert.pem\n"
+    condarc.write_text(original, encoding="utf-8")
+    result = configure_condarc_ssl_verify(condarc, system_ca_bundle="/etc/ssl/certs/ca-certificates.crt")
+    assert result is True
+    assert condarc.read_text(encoding="utf-8") == original
+
 

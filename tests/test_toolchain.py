@@ -66,3 +66,32 @@ def test_makefile_check_syntax_target() -> None:
     syntax_recipe = makefile.split("\ncheck-syntax:")[1].split("\n\n")[0]
     assert "--syntax-check" in syntax_recipe
     assert "$(ANSIBLE_ENV)" in syntax_recipe
+
+
+def test_makefile_system_ca_bundle_detection() -> None:
+    """Makefile probes multi-OS CA bundle paths and exports standard SSL env vars."""
+    makefile = read(REPO_ROOT / "Makefile")
+    assert "SYSTEM_CA_BUNDLE ?=" in makefile
+    assert "/etc/ssl/certs/ca-certificates.crt" in makefile
+    assert "/etc/pki/tls/certs/ca-bundle.crt" in makefile
+    assert "/etc/ssl/cert.pem" in makefile
+    assert "export SSL_CERT_FILE ?= $(SYSTEM_CA_BUNDLE)" in makefile
+    assert "export REQUESTS_CA_BUNDLE ?= $(SYSTEM_CA_BUNDLE)" in makefile
+    assert "export CURL_CA_BUNDLE ?= $(SYSTEM_CA_BUNDLE)" in makefile
+
+
+def test_makefile_galaxy_retry_insecure_fallback() -> None:
+    """Makefile bootstrap target checks DEVENV_INSECURE_SSL and falls back to --ignore-certs."""
+    makefile = read(REPO_ROOT / "Makefile")
+    bootstrap_target = makefile.split("\nbootstrap:")[1].split("\nconfigure:")[0]
+    assert "DEVENV_INSECURE_SSL" in bootstrap_target
+    assert "--ignore-certs" in bootstrap_target
+
+
+def test_ansible_cfg_galaxy_ca_cert() -> None:
+    """ansible.cfg configures ca_cert under [galaxy]."""
+    ansible_cfg = read(REPO_ROOT / "ansible.cfg")
+    assert "[galaxy]" in ansible_cfg
+    galaxy_section = ansible_cfg.split("[galaxy]")[1]
+    assert re.search(r"ca_cert\s*=", galaxy_section)
+

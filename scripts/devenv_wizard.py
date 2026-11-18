@@ -379,6 +379,69 @@ def prompt_user(
         return default or ""
 
 
+def detect_system_ca_bundle() -> str | None:
+    """Detect host system CA certificate bundle across Linux and macOS.
+
+    Probes known CA bundle locations in order:
+    1. /etc/ssl/certs/ca-certificates.crt (Debian/Ubuntu)
+    2. /etc/pki/tls/certs/ca-bundle.crt (RHEL/Fedora)
+    3. /etc/ssl/cert.pem (macOS)
+
+    Returns:
+        String path to the CA bundle if found, else None.
+    """
+    candidates = [
+        Path("/etc/ssl/certs/ca-certificates.crt"),
+        Path("/etc/pki/tls/certs/ca-bundle.crt"),
+        Path("/etc/ssl/cert.pem"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def configure_condarc_ssl_verify(
+    condarc_path: Path,
+    system_ca_bundle: str | None = None,
+) -> bool:
+    """Preserve or inject ssl_verify in .condarc using the system CA bundle.
+
+    If ssl_verify is already present, its value is preserved without modification.
+    Otherwise, if a system CA bundle is provided or detected, ssl_verify is
+    injected or appended to the condarc file.
+
+    Args:
+        condarc_path: Path to the .condarc file.
+        system_ca_bundle: Optional explicit CA bundle path.
+
+    Returns:
+        True if ssl_verify is configured or was newly injected, False otherwise.
+    """
+    if condarc_path.exists():
+        try:
+            content = condarc_path.read_text(encoding="utf-8")
+        except OSError:
+            content = ""
+    else:
+        content = ""
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#") and stripped.startswith(("ssl_verify:", "ssl_verify ")):
+            return True
+
+    bundle = system_ca_bundle if system_ca_bundle is not None else detect_system_ca_bundle()
+    if not bundle:
+        return False
+
+    condarc_path.parent.mkdir(parents=True, exist_ok=True)
+    separator = "\n" if content and not content.endswith("\n") else ""
+    suffix = f"{separator}ssl_verify: {bundle}\n"
+    condarc_path.write_text(content + suffix, encoding="utf-8")
+    return True
+
+
 def run_wizard(
     repo_root: Path,
     home_dir: Path,
@@ -535,6 +598,8 @@ def run_wizard(
     temp_file.write_text(yaml_content, encoding="utf-8")
     os.chmod(temp_file, 0o644)
     temp_file.replace(choices_file)
+
+    configure_condarc_ssl_verify(repo_root / "dotfiles" / "conda" / ".condarc")
 
     return choices
 
