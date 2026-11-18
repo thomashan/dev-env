@@ -183,6 +183,22 @@ bootstrap:
 				"$$mamba_bin" create -y -p "$(CONDA_DIR)" -c conda-forge --override-channels conda python=$(PYTHON_VERSION) ansible-core ansible-lint pyyaml || exit 1 ;; \
 		esac; \
 	fi
+	@if [ -d /usr/local/share/ca-certificates ] && [ -f "$(CONDA_DIR)/ssl/cacert.pem" ]; then \
+		for f in /usr/local/share/ca-certificates/*.crt /usr/local/share/ca-certificates/*.pem; do \
+			if [ -f "$$f" ]; then \
+				cert_name=$$(basename "$$f"); \
+				if ! grep -F -q "# BEGIN ANSIBLE MANAGED BLOCK: Custom CA $$cert_name" "$(CONDA_DIR)/ssl/cacert.pem"; then \
+					pattern=$$(grep -v -e '^-' "$$f" | grep -v -e '^[[:space:]]*$$' | head -n 1); \
+					if [ -n "$$pattern" ] && ! grep -F -q "$$pattern" "$(CONDA_DIR)/ssl/cacert.pem"; then \
+						printf "\n# BEGIN ANSIBLE MANAGED BLOCK: Custom CA %s\n" "$$cert_name" >> "$(CONDA_DIR)/ssl/cacert.pem"; \
+						cat "$$f" >> "$(CONDA_DIR)/ssl/cacert.pem"; \
+						if [ -n "$$(tail -c 1 "$$f" 2>/dev/null)" ]; then echo "" >> "$(CONDA_DIR)/ssl/cacert.pem"; fi; \
+						printf "# END ANSIBLE MANAGED BLOCK: Custom CA %s\n" "$$cert_name" >> "$(CONDA_DIR)/ssl/cacert.pem"; \
+					fi; \
+				fi; \
+			fi; \
+		done; \
+	fi
 	@if [ -x "$(PB)" ]; then \
 		echo "Using existing Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"; \
 	else \
