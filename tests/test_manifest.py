@@ -642,6 +642,20 @@ def test_nvim_lazyvim_example_starts_with_early_return():
     )
 
 
+def test_nvim_kickstart_markdownlint_auto_install_and_lint_guard():
+    """Verify kickstart auto-installs markdownlint via mason-tool-installer and guards try_lint."""
+    init_lua = read(REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "init.lua")
+    lint_lua = read(
+        REPO_ROOT / "dotfiles" / "nvim-kickstart" / ".config" / "nvim" / "lua" / "kickstart" / "plugins" / "lint.lua"
+    )
+
+    match = re.search(r"vim\.list_extend\(ensure_installed,\s*\{([^}]*)\}\)", init_lua)
+    assert match, "vim.list_extend(ensure_installed, { ... }) not found in kickstart init.lua"
+    assert "'markdownlint'" in match.group(1), "markdownlint not in ensure_installed extension list"
+
+    assert "lint.try_lint(nil, { ignore_errors = true })" in lint_lua
+
+
 def test_makefile_bootstrap_guards_collections_and_omits_force():
     """Verify Makefile bootstrap target guards galaxy collections and omits --force."""
     makefile = read(REPO_ROOT / "Makefile")
