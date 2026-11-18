@@ -66,3 +66,16 @@ def test_makefile_check_syntax_target() -> None:
     syntax_recipe = makefile.split("\ncheck-syntax:")[1].split("\n\n")[0]
     assert "--syntax-check" in syntax_recipe
     assert "$(ANSIBLE_ENV)" in syntax_recipe
+
+
+def test_makefile_bootstrap_ca_injection() -> None:
+    """Makefile bootstrap recipe checks and injects custom CA certificates."""
+    makefile = read(REPO_ROOT / "Makefile")
+    bootstrap_target = makefile.split("\nbootstrap:")[1].split("\nconfigure:")[0]
+    assert "/usr/local/share/ca-certificates" in bootstrap_target
+    assert "$(CONDA_DIR)/ssl/cacert.pem" in bootstrap_target
+    assert "*.crt" in bootstrap_target
+    assert "*.pem" in bootstrap_target
+    assert "ANSIBLE MANAGED BLOCK: Custom CA" in bootstrap_target
+    assert "grep -F -q" in bootstrap_target
+

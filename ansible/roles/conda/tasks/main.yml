@@ -187,6 +187,7 @@
     paths: /usr/local/share/ca-certificates
     patterns:
       - "*.crt"
+      - "*.pem"
     file_type: file
   register: devenv_custom_ca_certs
   when:
