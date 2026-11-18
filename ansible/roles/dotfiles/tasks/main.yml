@@ -138,6 +138,23 @@
       (item.stat.lnk_source if (item.stat.lnk_source | default('')).startswith('/')
        else (item.item.dest | dirname ~ '/' ~ (item.stat.lnk_source | default('')))) | realpath != (devenv_repo_root ~ '/' ~ item.item.src) | realpath
 
+- name: Inspect legacy tmux XDG symlink
+  ansible.builtin.stat:
+    path: "{{ devenv_home }}/.config/tmux/tmux.conf"
+  register: devenv_legacy_tmux_stat
+
+- name: Remove legacy tmux XDG symlink
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.config/tmux/tmux.conf"
+    state: absent
+  when:
+    - devenv_legacy_tmux_stat.stat.exists | default(false)
+    - devenv_legacy_tmux_stat.stat.islnk | default(false)
+    - >-
+      (((devenv_legacy_tmux_stat.stat.lnk_source if (devenv_legacy_tmux_stat.stat.lnk_source | default('')).startswith('/')
+        else (devenv_home ~ '/.config/tmux/' ~ (devenv_legacy_tmux_stat.stat.lnk_source | default('')))) | realpath).startswith(devenv_repo_root)) or
+      ('dotfiles/tmux/.config/tmux/tmux.conf' in (devenv_legacy_tmux_stat.stat.lnk_source | default('')))
+
 - name: Execute GNU Stow to link per-tool dotfiles packages
   ansible.builtin.command:
     cmd: >-

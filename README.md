@@ -132,31 +132,31 @@ make docs-fmt       # Format markdown documentation using Prettier
 
 All 23 core packages defined in `ansible/group_vars/all.yml`:
 
-| Logical Package | Category                  | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                                |
-| --------------- | ------------------------- | ---------------------- | --------------------- | ----------------------- | ---------------------------------------------------------- |
-| `aria2`         | `Networking / Download`   | `aria2`                | `aria2`               | Binary                  | High-speed multi-protocol download utility                 |
-| `autossh`       | `Networking / SSH`        | `autossh`              | `autossh`             | Binary                  | Automatically restarts SSH sessions and tunnels            |
-| `curl`          | `Networking / HTTP`       | `curl`                 | `curl`                | Binary                  | Command-line tool for transferring data with URLs          |
-| `delta`         | `Git / Diff`              | `delta`                | `git-delta`           | Binary                  | Syntax-highlighting pager for git diffs                    |
-| `fd`            | `Filesystem / Search`     | `fd`                   | `fd-find`             | Binary                  | Fast, user-friendly alternative to `find`                  |
-| `fish`          | `Terminal / Shell`        | `fish`                 | `fish`                | Stow package (`fish`)   | Smart and user-friendly command line shell                 |
-| `fzf`           | `Terminal / Search`       | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder                  |
-| `gh`            | `Git / GitHub`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                          |
-| `git`           | `Version Control`         | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system          |
-| `go`            | `Development / Toolchain` | `go`                   | `golang-go`           | Binary                  | Go programming language runtime and toolchain              |
-| `htop`          | `System Monitoring`       | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor              |
-| `iperf3`        | `Networking / Benchmark`  | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                         |
-| `jq`            | `Data / JSON`             | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor       |
-| `ncdu`          | `Filesystem / Disk`       | `ncdu`                 | `ncdu`                | Binary                  | NCurses disk usage analyzer                                |
-| `neovim`        | `Editor / IDE`            | `neovim`               | `neovim`              | Stow package (`nvim-*`) | Hyperextensible Vim-based text editor                      |
-| `openssh`       | `Networking / SSH`        | `openssh`              | `openssh-client`      | Binary                  | OpenSSH secure connectivity client suite                   |
-| `ripgrep`       | `Filesystem / Search`     | `ripgrep`              | `ripgrep`             | Binary                  | Line-oriented search tool respecting gitignore             |
-| `rsync`         | `Filesystem / Sync`       | `rsync`                | `rsync`               | Binary                  | Fast, versatile file copying and synchronization tool      |
-| `stow`          | `Dotfiles / Symlinks`     | `stow`                 | `stow`                | Binary                  | Symlink farm manager for dotfiles packages                 |
-| `tmux`          | `Terminal / Multiplexer`  | `tmux`                 | `tmux`                | Stow package (`tmux`)   | Terminal multiplexer (XDG path `~/.config/tmux/tmux.conf`) |
-| `tree`          | `Filesystem / Navigation` | `tree`                 | `tree`                | Binary                  | Recursive directory listing visualizer                     |
-| `unzip`         | `Archive / Compression`   | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)      |
-| `watch`         | `System Monitoring`       | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian)    |
+| Logical Package | Category                  | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                             |
+| --------------- | ------------------------- | ---------------------- | --------------------- | ----------------------- | ------------------------------------------------------- |
+| `aria2`         | `Networking / Download`   | `aria2`                | `aria2`               | Binary                  | High-speed multi-protocol download utility              |
+| `autossh`       | `Networking / SSH`        | `autossh`              | `autossh`             | Binary                  | Automatically restarts SSH sessions and tunnels         |
+| `curl`          | `Networking / HTTP`       | `curl`                 | `curl`                | Binary                  | Command-line tool for transferring data with URLs       |
+| `delta`         | `Git / Diff`              | `delta`                | `git-delta`           | Binary                  | Syntax-highlighting pager for git diffs                 |
+| `fd`            | `Filesystem / Search`     | `fd`                   | `fd-find`             | Binary                  | Fast, user-friendly alternative to `find`               |
+| `fish`          | `Terminal / Shell`        | `fish`                 | `fish`                | Stow package (`fish`)   | Smart and user-friendly command line shell              |
+| `fzf`           | `Terminal / Search`       | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder               |
+| `gh`            | `Git / GitHub`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                       |
+| `git`           | `Version Control`         | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system       |
+| `go`            | `Development / Toolchain` | `go`                   | `golang-go`           | Binary                  | Go programming language runtime and toolchain           |
+| `htop`          | `System Monitoring`       | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor           |
+| `iperf3`        | `Networking / Benchmark`  | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                      |
+| `jq`            | `Data / JSON`             | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor    |
+| `ncdu`          | `Filesystem / Disk`       | `ncdu`                 | `ncdu`                | Binary                  | NCurses disk usage analyzer                             |
+| `neovim`        | `Editor / IDE`            | `neovim`               | `neovim`              | Stow package (`nvim-*`) | Hyperextensible Vim-based text editor                   |
+| `openssh`       | `Networking / SSH`        | `openssh`              | `openssh-client`      | Binary                  | OpenSSH secure connectivity client suite                |
+| `ripgrep`       | `Filesystem / Search`     | `ripgrep`              | `ripgrep`             | Binary                  | Line-oriented search tool respecting gitignore          |
+| `rsync`         | `Filesystem / Sync`       | `rsync`                | `rsync`               | Binary                  | Fast, versatile file copying and synchronization tool   |
+| `stow`          | `Dotfiles / Symlinks`     | `stow`                 | `stow`                | Binary                  | Symlink farm manager for dotfiles packages              |
+| `tmux`          | `Terminal / Multiplexer`  | `tmux`                 | `tmux`                | Stow package (`tmux`)   | Terminal multiplexer (`~/.tmux.conf`)                   |
+| `tree`          | `Filesystem / Navigation` | `tree`                 | `tree`                | Binary                  | Recursive directory listing visualizer                  |
+| `unzip`         | `Archive / Compression`   | `(OS-provided)`        | `unzip`               | Binary                  | Extraction utility for zip archives (skipped in brew)   |
+| `watch`         | `System Monitoring`       | `watch`                | `procps`              | Binary                  | Periodic command execution monitor (`procps` on Debian) |
 
 ### 2. Language Runtimes & Conda Tools
 
@@ -176,7 +176,7 @@ remain real local folders:
 - `dotfiles/bash/` (**Terminal / Shell (Bash)**): `.bashrc`, `.bash_profile` (with `.local` override hooks)
 - `dotfiles/conda/` (**Python (Conda)**): `.condarc` (strict conda-forge channel configuration)
 - `dotfiles/fish/` (**Terminal / Shell (Fish)**): `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
-- `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.config/tmux/tmux.conf`
+- `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.tmux.conf`
 - `dotfiles/zsh/` (**Terminal / Shell (Zsh)**): `.zshrc` (with `.local` override hooks)
 - **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`)** (**Editor / IDE (Neovim / Lua)**):
   - `nvim-kickstart` (`dotfiles/nvim-kickstart/`): Full Kickstart.nvim configuration with `vim.pack`, LSP, Treesitter,
