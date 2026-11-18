@@ -3,6 +3,7 @@
 devenv_become_package_install: true
 devenv_pkg_skip:
   - neovim
+  - go
 devenv_casks: []
 devenv_brew_taps: []
 

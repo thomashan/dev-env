@@ -21,6 +21,7 @@ devenv_pkg_aliases:
   ncdu: ncdu
   delta: git-delta
   gh: gh                   # Debian requires the GitHub CLI apt repo; Ubuntu has it in universe
+  go: golang-go
   aria2: aria2
   autossh: autossh
   iperf3: iperf3

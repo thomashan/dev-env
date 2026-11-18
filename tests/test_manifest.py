@@ -600,14 +600,18 @@ def test_dotfiles_contain_no_personal_paths():
             assert token not in content, f"{token} found in {path.relative_to(REPO_ROOT)}"
 
 
-def test_tmux_conf_is_comment_only_factory_default():
-    """Verify tmux configuration adheres to comment-only upstream factory defaults."""
+def test_tmux_conf_smart_pane_switching():
+    """Verify tmux configuration provides smart pane switching with is_vim process detection."""
     tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".config" / "tmux" / "tmux.conf")
-    for line in tmux_conf.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        assert line.startswith("#"), f"Active tmux configuration found: {line}"
+    assert "is_vim=" in tmux_conf
+    assert "bind-key -n C-h if-shell \"$is_vim\" 'send-keys C-h' 'select-pane -L'" in tmux_conf
+    assert "bind-key -n C-j if-shell \"$is_vim\" 'send-keys C-j' 'select-pane -D'" in tmux_conf
+    assert "bind-key -n C-k if-shell \"$is_vim\" 'send-keys C-k' 'select-pane -U'" in tmux_conf
+    assert "bind-key -n C-l if-shell \"$is_vim\" 'send-keys C-l' 'select-pane -R'" in tmux_conf
+    assert "bind-key -T copy-mode-vi C-h select-pane -L" in tmux_conf
+    assert "bind-key -T copy-mode-vi C-j select-pane -D" in tmux_conf
+    assert "bind-key -T copy-mode-vi C-k select-pane -U" in tmux_conf
+    assert "bind-key -T copy-mode-vi C-l select-pane -R" in tmux_conf
 
 
 def test_nvim_minimal_init_lua_is_comment_only():
@@ -791,6 +795,9 @@ def test_devenv_shell_snippets_exists_and_valid() -> None:
     # Block D: Local override hook loading
     assert ".bashrc.local" in content, "missing .bashrc.local override hook"
     assert ".zshrc.local" in content, "missing .zshrc.local override hook"
+
+    # Block E: Go toolchain PATH export
+    assert "$HOME/go/bin" in content, "missing Go toolchain PATH export snippet"
 
 
 def test_read_only_probe_tasks_check_mode() -> None:
@@ -979,5 +986,6 @@ def test_ci_workflow_mandates_ansible_checks() -> None:
     runs = [s.get("run", "") for s in steps]
     assert any("make check-syntax" in run for run in runs), "Missing make check-syntax step in make.yml"
     assert any("make check-mode" in run for run in runs), "Missing make check-mode step in make.yml"
+
 
 

@@ -130,7 +130,7 @@ make docs-fmt       # Format markdown documentation using Prettier
 
 ### 1. Core CLI Packages (`devenv_packages_core`)
 
-All 22 core packages defined in `ansible/group_vars/all.yml`:
+All 23 core packages defined in `ansible/group_vars/all.yml`:
 
 | Logical Package | Category                  | macOS (`brew`) Formula | Linux (`apt`) Package | Stow Status             | Description                                                |
 | --------------- | ------------------------- | ---------------------- | --------------------- | ----------------------- | ---------------------------------------------------------- |
@@ -143,6 +143,7 @@ All 22 core packages defined in `ansible/group_vars/all.yml`:
 | `fzf`           | `Terminal / Search`       | `fzf`                  | `fzf`                 | Binary                  | General-purpose command-line fuzzy finder                  |
 | `gh`            | `Git / GitHub`            | `gh`                   | `gh`                  | Binary                  | GitHub official command-line tool                          |
 | `git`           | `Version Control`         | `git`                  | `git`                 | Binary                  | Fast, scalable distributed version control system          |
+| `go`            | `Development / Toolchain` | `go`                   | `golang-go`           | Binary                  | Go programming language runtime and toolchain              |
 | `htop`          | `System Monitoring`       | `htop`                 | `htop`                | Binary                  | Interactive process viewer and system monitor              |
 | `iperf3`        | `Networking / Benchmark`  | `iperf3`               | `iperf3`              | Binary                  | Network bandwidth measurement tool                         |
 | `jq`            | `Data / JSON`             | `jq`                   | `jq`                  | Binary                  | Lightweight and flexible command-line JSON processor       |
@@ -195,7 +196,7 @@ Managed by `fisher`:
 
 ### 5. Neovim Plugins (`nvim-pack-lock.json`)
 
-All 19 plugins managed via `vim.pack` and locked to explicit commit hashes (**Editor / IDE (Neovim / Lua)**):
+All 25 plugins managed via `vim.pack` and locked to explicit commit hashes (**Editor / IDE (Neovim / Lua)**):
 
 1. `LuaSnip` (**Editor / IDE (Neovim / Lua) — Snippets**): `https://github.com/L3MON4D3/LuaSnip`
 2. `blink.cmp` (**Editor / IDE (Neovim / Lua) — Completion**): `https://github.com/saghen/blink.cmp`
@@ -203,26 +204,34 @@ All 19 plugins managed via `vim.pack` and locked to explicit commit hashes (**Ed
 4. `fidget.nvim` (**Editor / IDE (Neovim / Lua) — UI / LSP Progress**): `https://github.com/j-hui/fidget.nvim`
 5. `gitsigns.nvim` (**Editor / IDE (Neovim / Lua) — Git Signs**): `https://github.com/lewis6991/gitsigns.nvim`
 6. `guess-indent.nvim` (**Editor / IDE (Neovim / Lua) — Indentation**): `https://github.com/NMAC427/guess-indent.nvim`
-7. `mason-lspconfig.nvim` (**Editor / IDE (Neovim / Lua) — LSP Management**):
+7. `indent-blankline.nvim` (**Editor / IDE (Neovim / Lua) — Indent Guides**):
+   `https://github.com/lukas-reineke/indent-blankline.nvim`
+8. `mason-lspconfig.nvim` (**Editor / IDE (Neovim / Lua) — LSP Management**):
    `https://github.com/mason-org/mason-lspconfig.nvim`
-8. `mason-tool-installer.nvim` (**Editor / IDE (Neovim / Lua) — Tool Installer**):
+9. `mason-tool-installer.nvim` (**Editor / IDE (Neovim / Lua) — Tool Installer**):
    `https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim`
-9. `mason.nvim` (**Editor / IDE (Neovim / Lua) — Package Manager**): `https://github.com/mason-org/mason.nvim`
-10. `mini.nvim` (**Editor / IDE (Neovim / Lua) — Utility Library**): `https://github.com/nvim-mini/mini.nvim`
-11. `nvim-lspconfig` (**Editor / IDE (Neovim / Lua) — LSP Client**): `https://github.com/neovim/nvim-lspconfig`
-12. `nvim-treesitter` (**Editor / IDE (Neovim / Lua) — Syntax Highlighting**):
+10. `mason.nvim` (**Editor / IDE (Neovim / Lua) — Package Manager**): `https://github.com/mason-org/mason.nvim`
+11. `mini.nvim` (**Editor / IDE (Neovim / Lua) — Utility Library**): `https://github.com/nvim-mini/mini.nvim`
+12. `neo-tree.nvim` (**Editor / IDE (Neovim / Lua) — File Explorer**): `https://github.com/nvim-neo-tree/neo-tree.nvim`
+13. `nui.nvim` (**Editor / IDE (Neovim / Lua) — UI Component Library**): `https://github.com/MunifTanjim/nui.nvim`
+14. `nvim-autopairs` (**Editor / IDE (Neovim / Lua) — Autopairs**): `https://github.com/windwp/nvim-autopairs`
+15. `nvim-lint` (**Editor / IDE (Neovim / Lua) — Linter**): `https://github.com/mfussenegger/nvim-lint`
+16. `nvim-lspconfig` (**Editor / IDE (Neovim / Lua) — LSP Client**): `https://github.com/neovim/nvim-lspconfig`
+17. `nvim-treesitter` (**Editor / IDE (Neovim / Lua) — Syntax Highlighting**):
     `https://github.com/nvim-treesitter/nvim-treesitter`
-13. `plenary.nvim` (**Editor / IDE (Neovim / Lua) — Lua Utility Functions**): `https://github.com/nvim-lua/plenary.nvim`
-14. `telescope-fzf-native.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Search Native**):
+18. `plenary.nvim` (**Editor / IDE (Neovim / Lua) — Lua Utility Functions**): `https://github.com/nvim-lua/plenary.nvim`
+19. `telescope-fzf-native.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Search Native**):
     `https://github.com/nvim-telescope/telescope-fzf-native.nvim`
-15. `telescope-ui-select.nvim` (**Editor / IDE (Neovim / Lua) — UI Selection**):
+20. `telescope-ui-select.nvim` (**Editor / IDE (Neovim / Lua) — UI Selection**):
     `https://github.com/nvim-telescope/telescope-ui-select.nvim`
-16. `telescope.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Finder**):
+21. `telescope.nvim` (**Editor / IDE (Neovim / Lua) — Fuzzy Finder**):
     `https://github.com/nvim-telescope/telescope.nvim`
-17. `todo-comments.nvim` (**Editor / IDE (Neovim / Lua) — Highlight Comments**):
+22. `todo-comments.nvim` (**Editor / IDE (Neovim / Lua) — Highlight Comments**):
     `https://github.com/folke/todo-comments.nvim`
-18. `tokyonight.nvim` (**Editor / IDE (Neovim / Lua) — Colorscheme**): `https://github.com/folke/tokyonight.nvim`
-19. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
+23. `tokyonight.nvim` (**Editor / IDE (Neovim / Lua) — Colorscheme**): `https://github.com/folke/tokyonight.nvim`
+24. `vim-tmux-navigator` (**Editor / IDE (Neovim / Lua) — Tmux Navigation**):
+    `https://github.com/christoomey/vim-tmux-navigator`
+25. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
 
 ### 6. macOS GUI Casks & Purged Unmanaged Packages
 

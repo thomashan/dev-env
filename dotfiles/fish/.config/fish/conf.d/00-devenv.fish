@@ -73,3 +73,8 @@ if command -q micromamba
     end
 end
 
+# --- Go toolchain PATH export ---
+if test -d "$HOME/go/bin"
+    fish_add_path -gPm "$HOME/go/bin"
+end
+

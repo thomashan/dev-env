@@ -23,6 +23,7 @@ devenv_pkg_aliases:
   ncdu: ncdu
   delta: delta
   gh: gh
+  go: go
   aria2: aria2
   autossh: autossh
   iperf3: iperf3

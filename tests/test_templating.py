@@ -83,6 +83,19 @@ def test_wanted_list_drops_os_provided_packages(templar, group_vars):
     assert result == sorted(["cURL", "fzf", "git"])
 
 
+def test_wanted_list_drops_linux_skipped_packages(templar, group_vars):
+    """devenv_pkg_skip on Linux drops both neovim and go from wanted list."""
+    result = templar(
+        wanted_expr(),
+        {
+            "devenv_packages_core": ["git", "neovim", "go", "tmux"],
+            "devenv_packages_extra": [],
+            "devenv_pkg_skip": ["neovim", "go"],
+        },
+    )
+    assert result == sorted(["git", "tmux"])
+
+
 def test_wanted_list_survives_a_missing_skip_table(templar):
     """os_Linux.yml has devenv_pkg_skip, but the default([]) keeps it optional."""
     result = templar(
@@ -185,6 +198,22 @@ def test_neovim_homebrew_install_task_properties(templar):
     condition = neovim_install["when"]
     assert templar(condition, {"devenv_neovim_source": "brew"}) is True
     assert templar(condition, {"devenv_neovim_source": "github"}) is False
+
+
+def test_packages_homebrew_go_install_task_properties(templar):
+    """Packages role installs go via community.general.homebrew on Linux."""
+    go_install = task("packages", "Install Go via Homebrew on Linux")
+    assert go_install["community.general.homebrew"]["name"] == "go"
+    assert go_install["community.general.homebrew"]["state"] == "present"
+    conditions = go_install["when"]
+    assert isinstance(conditions, list)
+
+    def eval_when(vars_dict: dict) -> bool:
+        return all(bool(templar(cond, vars_dict)) for cond in conditions)
+
+    assert eval_when({"devenv_system": "Linux", "devenv_brew_bin": "/home/linuxbrew/.linuxbrew/bin/brew"}) is True
+    assert eval_when({"devenv_system": "Darwin", "devenv_brew_bin": "/opt/homebrew/bin/brew"}) is False
+    assert eval_when({"devenv_system": "Linux", "devenv_brew_bin": ""}) is False
 
 
 @pytest.mark.parametrize(
