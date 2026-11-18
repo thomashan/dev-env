@@ -1,0 +1,29 @@
+{
+  "kb_id": "KB-failure-89150fe1",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-18T00:06:56.395856+00:00",
+  "updated_ts": "2026-11-18T00:06:56.395856+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1794959783-becbecbe",
+      "ACT-REV-1794959779-9f345ebb"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1794958469-mamba-ansible/P-1794958486-949b3e06-antigravity-agent-gemini-3.8-flash-medium/E-1794958722-b0563861-antigravity-agent-gemini-3.8-flash-medium/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 reviewer 2 completed",
+    "symptoms": []
+  }
+}
