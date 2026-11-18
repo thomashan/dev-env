@@ -949,3 +949,35 @@ def test_node_role_symlinks_and_multishell_assertions() -> None:
     assert any("devenv_node_which_zsh" in cond for cond in flat_assertions), "missing zsh node assertion"
     assert any("devenv_node_which" in cond for cond in flat_assertions), "missing fish node assertion"
 
+
+def test_neovim_source_unified_across_platforms(os_vars, group_vars) -> None:
+    """Neovim source must be unified as brew and skipped on Linux package backend."""
+    assert group_vars["devenv_neovim_source"] == "brew"
+    assert os_vars["Linux"]["devenv_neovim_source"] == "brew"
+    assert os_vars["Darwin"]["devenv_neovim_source"] == "brew"
+    assert "neovim" in os_vars["Linux"].get("devenv_pkg_skip", []), "Linux must skip neovim in devenv_pkg_skip"
+
+
+def test_neovim_role_tasks_structure() -> None:
+    """Neovim role must resolve Homebrew and install via community.general.homebrew."""
+    neovim_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "neovim" / "tasks" / "main.yml"))
+    locate_brew = next((t for t in neovim_tasks if t.get("name") == "Locate Homebrew"), None)
+    assert locate_brew is not None, "Missing Locate Homebrew task in neovim role"
+    record_brew = next((t for t in neovim_tasks if t.get("name") == "Record Homebrew location"), None)
+    assert record_brew is not None, "Missing Record Homebrew location task in neovim role"
+    install_brew = next((t for t in neovim_tasks if t.get("name") == "Install Neovim via Homebrew"), None)
+    assert install_brew is not None, "Missing Install Neovim via Homebrew task in neovim role"
+    assert install_brew["community.general.homebrew"]["name"] == "neovim"
+    assert install_brew["community.general.homebrew"]["state"] == "present"
+    assert "devenv_neovim_source == 'brew'" in install_brew.get("when", "")
+
+
+def test_ci_workflow_mandates_ansible_checks() -> None:
+    """make.yml workflow must execute make check-syntax and make check-mode."""
+    workflow = yaml.safe_load(read(REPO_ROOT / ".github" / "workflows" / "make.yml"))
+    steps = workflow["jobs"]["make-matrix"]["steps"]
+    runs = [s.get("run", "") for s in steps]
+    assert any("make check-syntax" in run for run in runs), "Missing make check-syntax step in make.yml"
+    assert any("make check-mode" in run for run in runs), "Missing make check-mode step in make.yml"
+
+

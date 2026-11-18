@@ -1,43 +1,29 @@
 ---
-# Neovim comes from brew on macOS, from the upstream GitHub release on Debian /
-# Ubuntu (the packaged build there predates vim.pack, which this config uses).
+# Neovim is installed via Homebrew across both macOS and Linux (Linuxbrew)
+# to guarantee Neovim >= 0.12 with vim.pack and nvim-pack-lock.json support.
 
-- name: Resolve the latest Neovim release (github source only)
-  community.general.github_release:
-    repo: neovim/neovim
-    user: neovim
-  register: devenv_nvim_release
-  when: devenv_neovim_source == 'github'
+- name: Locate Homebrew
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: devenv_brew_stat
+  loop:
+    - /opt/homebrew/bin/brew
+    - /usr/local/bin/brew
+    - /home/linuxbrew/.linuxbrew/bin/brew
+    - "{{ devenv_home }}/.linuxbrew/bin/brew"
+  when: devenv_brew_bin is not defined or (devenv_brew_bin | length == 0)
 
-- name: Compute the release asset name
+- name: Record Homebrew location
   ansible.builtin.set_fact:
-    devenv_nvim_asset: >-
-      nvim-{{ devenv_neovim_asset_os[devenv_system] }}-{{ devenv_neovim_asset_arch[devenv_system][devenv_arch] }}.tar.gz
-  when: devenv_neovim_source == 'github'
+    devenv_brew_bin: "{{ (devenv_brew_stat.results | selectattr('stat.exists') | map(attribute='item') | list + ['']) | first }}"
+  when: devenv_brew_bin is not defined or (devenv_brew_bin | length == 0)
 
-- name: Download the Neovim release archive
-  ansible.builtin.get_url:
-    url: "{{ devenv_nvim_release.assets[devenv_nvim_asset] }}"
-    dest: "{{ devenv_home }}/.cache/dev-env/{{ devenv_nvim_asset }}"
-    mode: "0644"
-  when: devenv_neovim_source == 'github'
-
-- name: Unpack Neovim under a user-owned prefix
-  ansible.builtin.unarchive:
-    src: "{{ devenv_home }}/.cache/dev-env/{{ devenv_nvim_asset }}"
-    dest: "{{ devenv_home }}/.local/opt"
-    remote_src: true
-    extra_opts: [--strip-components=1]
-    creates: "{{ devenv_home }}/.local/opt/bin/nvim"
-  when: devenv_neovim_source == 'github'
-
-- name: Put the release build first on the tool path
-  ansible.builtin.file:
-    src: "{{ devenv_home }}/.local/opt/bin/nvim"
-    dest: "{{ devenv_home }}/.local/bin/nvim"
-    state: link
-    force: true
-  when: devenv_neovim_source == 'github'
+- name: Install Neovim via Homebrew
+  community.general.homebrew:
+    name: neovim
+    state: present
+    path: "{{ devenv_brew_bin | default(omit) }}"
+  when: devenv_neovim_source == 'brew'
 
 - name: Read the installed Neovim version
   ansible.builtin.command:
@@ -53,8 +39,8 @@
       - devenv_nvim_version.stdout_lines[0] | regex_replace('^NVIM v', '') is version('0.12', '>=')
     fail_msg: >-
       {{ devenv_nvim_version.stdout_lines[0] }} is too old; dotfiles/nvim-kickstart/.config/nvim/init.lua
-      uses vim.pack() + nvim-pack-lock.json (0.12+). Set devenv_neovim_source: github for
-      this platform.
+      uses vim.pack() + nvim-pack-lock.json (0.12+). Ensure Neovim >= 0.12 is installed via Homebrew
+      (devenv_neovim_source: brew).
     quiet: true
   when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'
 

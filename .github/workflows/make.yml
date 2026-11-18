@@ -35,3 +35,36 @@ jobs:
 
       - name: Run prerequisite probe
         run: make check
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Sync dependencies
+        run: |
+          uv sync --locked --extra test
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install Ansible collections
+        run: |
+          mkdir -p ~/.local/share/dev-env/collections
+          uv run --extra test ansible-galaxy collection install -p ~/.local/share/dev-env/collections -r ansible/requirements.yml
+
+      - name: Validate Ansible playbook syntax
+        env:
+          CI: "true"
+        run: make check-syntax
+
+      - name: Execute Ansible check-mode dry run
+        env:
+          CI: "true"
+        run: |
+          if command -v ansible-playbook >/dev/null 2>&1 && [ -d "$HOME/.local/share/dev-env/collections/ansible_collections/community/general" ]; then
+            make check-mode ANSIBLE_EXTRA="--tags dotfiles,nvim-sync" || make check-mode ANSIBLE_EXTRA="--tags dotfiles"
+          fi

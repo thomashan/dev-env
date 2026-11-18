@@ -17,4 +17,4 @@ devenv_casks:
   - docker-desktop
 
 # Neovim source for this platform (see comment in group_vars/all.yml)
-devenv_neovim_source: package
+devenv_neovim_source: brew

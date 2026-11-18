@@ -8,7 +8,7 @@ devenv_pkg_aliases:
   unzip: unzip
   rsync: rsync
   openssh: openssh-client
-  neovim: neovim           # Debian stable ships an old Neovim; use devenv_neovim_source: github for 0.12+ (vim.pack)
+  neovim: neovim           # Debian stable ships an old Neovim; skipped in devenv_pkg_skip with devenv_neovim_source: brew (0.12+)
   tmux: tmux
   fish: fish
   ripgrep: ripgrep
