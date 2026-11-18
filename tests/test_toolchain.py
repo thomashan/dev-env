@@ -79,3 +79,17 @@ def test_makefile_bootstrap_ca_injection() -> None:
     assert "ANSIBLE MANAGED BLOCK: Custom CA" in bootstrap_target
     assert "grep -F -q" in bootstrap_target
 
+
+def test_go_toolchain_declarations_and_skip(os_vars, group_vars) -> None:
+    """Go toolchain package must be declared in core and skipped in apt on Linux."""
+    assert "go" in group_vars.get("devenv_packages_core", []), "go missing from devenv_packages_core"
+    assert "go" in os_vars["Linux"].get("devenv_pkg_skip", []), "go missing from Linux devenv_pkg_skip"
+
+
+def test_fish_go_path_addition() -> None:
+    """00-devenv.fish must export $HOME/go/bin via fish_add_path."""
+    fish_conf = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    assert "$HOME/go/bin" in fish_conf, "missing $HOME/go/bin in 00-devenv.fish"
+    assert "fish_add_path" in fish_conf, "missing fish_add_path in 00-devenv.fish"
+
+

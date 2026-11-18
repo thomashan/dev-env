@@ -600,7 +600,7 @@ def test_dotfiles_contain_no_personal_paths():
             assert token not in content, f"{token} found in {path.relative_to(REPO_ROOT)}"
 
 
-def test_tmux_conf_is_comment_only_factory_default():
+def test_tmux_conf_smart_pane_switching():
     """Verify tmux configuration provides smart pane switching with is_vim process detection."""
     tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".config" / "tmux" / "tmux.conf")
     assert "is_vim=" in tmux_conf
@@ -986,19 +986,6 @@ def test_ci_workflow_mandates_ansible_checks() -> None:
     runs = [s.get("run", "") for s in steps]
     assert any("make check-syntax" in run for run in runs), "Missing make check-syntax step in make.yml"
     assert any("make check-mode" in run for run in runs), "Missing make check-mode step in make.yml"
-
-
-def test_go_toolchain_declarations_and_skip(os_vars, group_vars) -> None:
-    """Go toolchain package must be declared in core and skipped in apt on Linux."""
-    assert "go" in group_vars.get("devenv_packages_core", []), "go missing from devenv_packages_core"
-    assert "go" in os_vars["Linux"].get("devenv_pkg_skip", []), "go missing from Linux devenv_pkg_skip"
-
-
-def test_fish_go_path_addition() -> None:
-    """00-devenv.fish must export $HOME/go/bin via fish_add_path."""
-    fish_conf = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
-    assert "$HOME/go/bin" in fish_conf, "missing $HOME/go/bin in 00-devenv.fish"
-    assert "fish_add_path" in fish_conf, "missing fish_add_path in 00-devenv.fish"
 
 
 
