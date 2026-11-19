@@ -132,3 +132,11 @@ def test_multishell_node_extra_ca_certs_parity() -> None:
     assert 'export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"' in zshrc
     assert 'export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"' in snippets
     assert 'set -gx NODE_EXTRA_CA_CERTS "$HOME/.config/node/node-extra-ca.pem"' in fish_conf
+
+
+def test_tmux_pane_current_path_keybindings() -> None:
+    """tmux configuration binds splits and new windows to current pane working directory."""
+    tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".tmux.conf")
+    assert 'bind-key \'"\' split-window -v -c "#{pane_current_path}"' in tmux_conf
+    assert 'bind-key % split-window -h -c "#{pane_current_path}"' in tmux_conf
+    assert 'bind-key c new-window -c "#{pane_current_path}"' in tmux_conf
