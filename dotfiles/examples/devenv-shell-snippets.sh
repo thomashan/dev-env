@@ -74,3 +74,12 @@ fi
 if [ -d "$HOME/go/bin" ]; then
     export PATH="$HOME/go/bin:$PATH"
 fi
+
+# ----------------------------------------------------------------------------
+# Block F: Custom Node Extra CA Bundle
+# ----------------------------------------------------------------------------
+# Points NODE_EXTRA_CA_CERTS to the folded custom CA bundle if present.
+if [ -f "$HOME/.config/node/node-extra-ca.pem" ]; then
+    export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"
+fi
+

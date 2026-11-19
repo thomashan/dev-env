@@ -52,6 +52,10 @@ esac
 # NVM and Node configuration (canonical XDG convention)
 export NVM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/nvm"
 
+if [ -f "$HOME/.config/node/node-extra-ca.pem" ]; then
+    export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"
+fi
+
 # Re-assert NVM current bin and ~/.local/bin precedence ahead of Homebrew
 if [ -d "$NVM_DIR/current/bin" ]; then
     case ":$PATH:" in
