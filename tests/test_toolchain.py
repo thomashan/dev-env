@@ -106,3 +106,29 @@ def test_nvim_kickstart_markdownlint_auto_install_and_lint_guard() -> None:
 
     assert "lint.try_lint(nil, { ignore_errors = true })" in lint_lua
 
+
+def test_node_ansible_role_ca_folding() -> None:
+    """Node Ansible role folds custom CA certificates into node-extra-ca.pem."""
+    node_tasks = read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml")
+    assert "/usr/local/share/ca-certificates" in node_tasks
+    assert "node-extra-ca.pem" in node_tasks
+    assert "ansible.builtin.blockinfile" in node_tasks
+    assert "recurse: true" in node_tasks or "recurse: yes" in node_tasks or "recurse: True" in node_tasks
+    assert "# {mark} ANSIBLE MANAGED BLOCK: Custom CA" in node_tasks
+
+
+def test_multishell_node_extra_ca_certs_parity() -> None:
+    """Fish, Bash, Zsh, and snippet templates conditionally export NODE_EXTRA_CA_CERTS."""
+    bashrc = read(REPO_ROOT / "dotfiles" / "bash" / ".bashrc")
+    zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
+    fish_conf = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
+    snippets = read(REPO_ROOT / "dotfiles" / "examples" / "devenv-shell-snippets.sh")
+
+    for file_content in (bashrc, zshrc, fish_conf, snippets):
+        assert "NODE_EXTRA_CA_CERTS" in file_content
+        assert ".config/node/node-extra-ca.pem" in file_content
+
+    assert 'export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"' in bashrc
+    assert 'export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"' in zshrc
+    assert 'export NODE_EXTRA_CA_CERTS="$HOME/.config/node/node-extra-ca.pem"' in snippets
+    assert 'set -gx NODE_EXTRA_CA_CERTS "$HOME/.config/node/node-extra-ca.pem"' in fish_conf

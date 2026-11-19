@@ -148,3 +148,52 @@
       order in dotfiles/fish/.config/fish/config.fish or remove the competitor with
       devenv_remove_unmanaged: true.
     quiet: true
+
+- name: Stat CA certificates directory
+  ansible.builtin.stat:
+    path: /usr/local/share/ca-certificates
+  register: devenv_node_ca_certs_dir_stat
+
+- name: Discover custom CA certificates for Node
+  ansible.builtin.find:
+    paths: /usr/local/share/ca-certificates
+    patterns:
+      - "*.crt"
+      - "*.pem"
+    file_type: file
+    recurse: true
+  register: devenv_node_custom_ca_certs
+  when:
+    - devenv_node_ca_certs_dir_stat.stat.exists | default(false)
+    - devenv_node_ca_certs_dir_stat.stat.isdir | default(false)
+
+- name: Ensure Node config directory exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.config/node"
+    state: directory
+    mode: "0755"
+  when:
+    - devenv_node_custom_ca_certs.matched | default(0) > 0
+
+- name: Slurp custom CA certificates for Node
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  register: devenv_node_custom_ca_contents
+  loop: "{{ devenv_node_custom_ca_certs.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - devenv_node_custom_ca_certs.matched | default(0) > 0
+
+- name: Fold custom CA certificates into Node extra CA bundle
+  ansible.builtin.blockinfile:
+    path: "{{ devenv_home }}/.config/node/node-extra-ca.pem"
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: Custom CA {{ (item.item.path | default(item.path | default(''))) | basename }}"
+    block: "{{ item.content | b64decode }}"
+  loop: "{{ (devenv_node_custom_ca_contents.results | default([])) | selectattr('content', 'defined') | list }}"
+  loop_control:
+    label: "{{ (item.item.path | default(item.path | default(''))) | basename }}"
+  when:
+    - devenv_node_custom_ca_contents.results is defined

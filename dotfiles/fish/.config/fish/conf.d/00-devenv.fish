@@ -52,6 +52,10 @@ end
 
 fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"
 
+if test -f "$HOME/.config/node/node-extra-ca.pem"
+    set -gx NODE_EXTRA_CA_CERTS "$HOME/.config/node/node-extra-ca.pem"
+end
+
 # --- micromamba discovery and conda alias / hook integration ---
 if not command -q conda
     if command -q micromamba
