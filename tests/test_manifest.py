@@ -388,7 +388,7 @@ def test_stow_packages_match_dotfiles_subdirectories(group_vars):
         for tool_info in group_vars.get("devenv_package_variants", {}).values()
         for v_info in tool_info.get("variants", {}).values()
     }
-    base_pkgs = {"bash", "conda", "fish", "tmux", "zsh"}
+    base_pkgs = {"bash", "conda", "fish", "ghostty", "tmux", "zsh"}
     assert pkg_dirs == (base_pkgs | variant_pkgs)
 
 

@@ -140,3 +140,87 @@ def test_tmux_pane_current_path_keybindings() -> None:
     assert 'bind-key \'"\' split-window -v -c "#{pane_current_path}"' in tmux_conf
     assert 'bind-key % split-window -h -c "#{pane_current_path}"' in tmux_conf
     assert 'bind-key c new-window -c "#{pane_current_path}"' in tmux_conf
+
+
+def test_gui_casks_and_linux_gui_apps_declarations(os_vars, group_vars) -> None:
+    """GUI casks and Linux GUI application variable declarations adhere to OS isolation."""
+    assert "docker-desktop" in os_vars["Darwin"]["devenv_casks"]
+    assert "ghostty" in os_vars["Darwin"]["devenv_casks"]
+    assert "warp" in os_vars["Darwin"]["devenv_casks"]
+    assert os_vars["Linux"]["devenv_casks"] == []
+    assert os_vars["Linux"]["devenv_linux_gui_apps"] == ["ghostty", "warp"]
+    assert group_vars["devenv_linux_gui_apps"] == []
+
+
+def test_ghostty_stow_config_and_links(group_vars) -> None:
+    """Ghostty Stow config exists, unbinds Option+Arrow, and is registered in Stow packages and links."""
+    ghostty_config_path = REPO_ROOT / "dotfiles" / "ghostty" / ".config" / "ghostty" / "config.ghostty"
+    assert ghostty_config_path.exists(), "Ghostty config.ghostty missing"
+    ghostty_config = read(ghostty_config_path)
+    assert "keybind = alt+arrow_left=unbind" in ghostty_config
+    assert "keybind = alt+arrow_right=unbind" in ghostty_config
+
+    assert "ghostty" in group_vars.get("devenv_stow_packages", [])
+    link_entries = group_vars.get("devenv_links", [])
+    assert any(
+        entry.get("src") == "dotfiles/ghostty/.config/ghostty/config.ghostty"
+        and entry.get("dest") == "{{ devenv_home }}/.config/ghostty/config.ghostty"
+        for entry in link_entries
+    ), "Ghostty link missing from devenv_links"
+
+
+def test_zsh_word_jump_keybindings() -> None:
+    """Zsh configuration binds CSI word navigation key sequences inside interactive guard."""
+    zshrc = read(REPO_ROOT / "dotfiles" / "zsh" / ".zshrc")
+    assert "[[ -o interactive ]]" in zshrc
+    assert 'bindkey "^[[1;3D" backward-word' in zshrc
+    assert 'bindkey "^[[1;3C" forward-word' in zshrc
+    assert 'bindkey "^[[1;5D" backward-word' in zshrc
+    assert 'bindkey "^[[1;5C" forward-word' in zshrc
+
+
+def test_linux_packages_gui_terminal_tasks() -> None:
+    """Packages role defines check-mode safe, idempotent Linux tasks for Warp and Ghostty."""
+    import yaml
+
+    packages_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "packages" / "tasks" / "main.yml"))
+
+    warp_probe = next((t for t in packages_tasks if t.get("name") == "Probe Warp terminal binary"), None)
+    assert warp_probe is not None
+    assert warp_probe.get("check_mode") is False
+    assert warp_probe.get("failed_when") is False
+
+    warp_keyring = next((t for t in packages_tasks if t.get("name") == "Ensure APT keyrings directory exists"), None)
+    assert warp_keyring is not None
+    assert warp_keyring.get("ansible.builtin.file", {}).get("path") == "/etc/apt/keyrings"
+
+    warp_gpg = next((t for t in packages_tasks if t.get("name") == "Fetch and dearmor Warp GPG signing key"), None)
+    assert warp_gpg is not None
+    assert warp_gpg.get("ansible.builtin.command", {}).get("creates") == "/etc/apt/keyrings/warpdotdev.gpg"
+
+    warp_repo = next((t for t in packages_tasks if t.get("name") == "Configure Warp APT repository"), None)
+    assert warp_repo is not None
+    assert warp_repo.get("ansible.builtin.copy", {}).get("dest") == "/etc/apt/sources.list.d/warpdotdev.list"
+    content = warp_repo.get("ansible.builtin.copy", {}).get("content", "")
+    assert "https://releases.warp.dev/linux/deb stable main" in content
+    assert "x86_64" in content and "amd64" in content
+    assert "arm64" in content
+
+    ghostty_probe = next((t for t in packages_tasks if t.get("name") == "Probe Ghostty binary"), None)
+    assert ghostty_probe is not None
+    assert ghostty_probe.get("check_mode") is False
+    assert ghostty_probe.get("failed_when") is False
+
+    ghostty_apt_cache = next(
+        (t for t in packages_tasks if t.get("name") == "Probe native Ghostty apt package availability"), None
+    )
+    assert ghostty_apt_cache is not None
+    assert ghostty_apt_cache.get("check_mode") is False
+
+    ghostty_snap = next((t for t in packages_tasks if t.get("name") == "Install Ghostty via snap"), None)
+    assert ghostty_snap is not None
+    assert "snap install ghostty --classic" in ghostty_snap.get("ansible.builtin.command", "")
+
+    ghostty_ppa = next((t for t in packages_tasks if t.get("name") == "Add Ghostty PPA on Ubuntu"), None)
+    assert ghostty_ppa is not None
+    assert ghostty_ppa.get("ansible.builtin.apt_repository", {}).get("repo") == "ppa:mkasberg/ghostty-ubuntu"

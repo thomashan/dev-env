@@ -63,6 +63,7 @@ devenv_supported_backends:
 # --- feature flags ----------------------------------------------------------
 devenv_install_homebrew: true      # Darwin only; needs interactive sudo
 devenv_install_gui_casks: true     # browsers, Docker Desktop, IDEs, ...
+devenv_linux_gui_apps: []          # Linux GUI terminal apps (ghostty, warp)
 devenv_set_login_shell: true       # opt-in: chsh to fish (make login-shell)
 devenv_remove_unmanaged: false     # opt-in: purge packages in devenv_packages_remove
 devenv_backup_dotfiles: true
@@ -155,6 +156,7 @@ devenv_stow_packages:
   - bash
   - conda
   - fish
+  - ghostty
   - nvim-kickstart
   - tmux
   - zsh
@@ -172,6 +174,8 @@ devenv_links:
     dest: "{{ devenv_home }}/.config/fish/fish_plugins"
   - src: dotfiles/fish/.config/fish/conf.d/00-devenv.fish
     dest: "{{ devenv_home }}/.config/fish/conf.d/00-devenv.fish"
+  - src: dotfiles/ghostty/.config/ghostty/config.ghostty
+    dest: "{{ devenv_home }}/.config/ghostty/config.ghostty"
   - src: dotfiles/nvim-kickstart/.config/nvim/.stylua.toml
     dest: "{{ devenv_home }}/.config/nvim/.stylua.toml"
   - src: dotfiles/nvim-kickstart/.config/nvim/init.lua

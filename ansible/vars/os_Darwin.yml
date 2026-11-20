@@ -15,6 +15,8 @@ devenv_brew_taps: []
 # path is identical to Linux (a cask would pin it to /opt/homebrew/Caskroom/...).
 devenv_casks:
   - docker-desktop
+  - ghostty
+  - warp
 
 # Neovim source for this platform (see comment in group_vars/all.yml)
 devenv_neovim_source: brew

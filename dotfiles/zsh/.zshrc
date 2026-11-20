@@ -108,5 +108,13 @@ if ! command -v conda >/dev/null 2>&1; then
     fi
 fi
 
+# CSI word navigation keybindings (parity with Fish and Bash across macOS and Linux)
+if [[ -o interactive ]]; then
+    bindkey "^[[1;3D" backward-word  # Option/Alt + Left
+    bindkey "^[[1;3C" forward-word   # Option/Alt + Right
+    bindkey "^[[1;5D" backward-word  # Ctrl + Left
+    bindkey "^[[1;5C" forward-word   # Ctrl + Right
+fi
+
 # --- Local override hook ---
 [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"

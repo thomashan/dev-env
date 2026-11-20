@@ -401,3 +401,60 @@ def test_wizard_prompts_have_no_step_letter_prefixes(tmp_path, monkeypatch):
     for line in code_lines:
         assert not step_prefix_pattern.search(line), f"Wizard code contains 'Step [A-Z]:': {line}"
 
+
+def test_wizard_gui_apps_prompts_brew_and_apt(tmp_path, monkeypatch):
+    """Wizard prompts for GUI apps with proper application names on brew and apt."""
+    repo_root = tmp_path / "repo"
+    home_dir = tmp_path / "home"
+
+    dotfiles = repo_root / "dotfiles"
+    (dotfiles / "bash").mkdir(parents=True)
+    (dotfiles / "nvim-kickstart").mkdir(parents=True)
+
+    # Test brew backend prompt
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr("platform.machine", lambda: "arm64")
+
+    brew_prompts: list[str] = []
+
+    def mock_prompt_brew(prompt_str, default=None, interactive=True):
+        brew_prompts.append(prompt_str)
+        return default or ""
+
+    with patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt_brew):
+        run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=home_dir / "choices_brew.yml",
+            interactive=True,
+        )
+
+    gui_brew_prompt = next((p for p in brew_prompts if "Install GUI casks" in p), None)
+    assert gui_brew_prompt is not None, "Missing GUI casks prompt on brew"
+    assert "docker-desktop" in gui_brew_prompt
+    assert "ghostty" in gui_brew_prompt
+    assert "warp" in gui_brew_prompt
+
+    # Test apt backend prompt
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+
+    apt_prompts: list[str] = []
+
+    def mock_prompt_apt(prompt_str, default=None, interactive=True):
+        apt_prompts.append(prompt_str)
+        return default or ""
+
+    with patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt_apt):
+        run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=home_dir / "choices_apt.yml",
+            interactive=True,
+        )
+
+    gui_apt_prompt = next((p for p in apt_prompts if "Install GUI terminal apps" in p), None)
+    assert gui_apt_prompt is not None, "Missing GUI terminal apps prompt on apt"
+    assert "ghostty" in gui_apt_prompt
+    assert "warp" in gui_apt_prompt
+

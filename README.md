@@ -176,6 +176,8 @@ remain real local folders:
 - `dotfiles/bash/` (**Terminal / Shell (Bash)**): `.bashrc`, `.bash_profile` (with `.local` override hooks)
 - `dotfiles/conda/` (**Python (Conda)**): `.condarc` (strict conda-forge channel configuration)
 - `dotfiles/fish/` (**Terminal / Shell (Fish)**): `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
+- `dotfiles/ghostty/` (**Terminal / Emulator (Ghostty)**): `.config/ghostty/config.ghostty` (unbinds Option+Arrow keys
+  to prevent interception before tmux horizontal pane resizing)
 - `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.tmux.conf`
 - `dotfiles/zsh/` (**Terminal / Shell (Zsh)**): `.zshrc` (with `.local` override hooks)
 - **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`)** (**Editor / IDE (Neovim / Lua)**):
@@ -233,10 +235,13 @@ All 25 plugins managed via `vim.pack` and locked to explicit commit hashes (**Ed
     `https://github.com/christoomey/vim-tmux-navigator`
 25. `which-key.nvim` (**Editor / IDE (Neovim / Lua) — Keybinding Popup**): `https://github.com/folke/which-key.nvim`
 
-### 6. macOS GUI Casks & Purged Unmanaged Packages
+### 6. GUI Applications & Purged Unmanaged Packages
 
-- **GUI Casks (`devenv_casks`):** `docker-desktop` (**Containers / Virtualization**) — installed when
+- **macOS GUI Casks (`devenv_casks`):** `docker-desktop`, `ghostty`, `warp` — installed when
   `devenv_install_gui_casks: true`.
+- **Linux GUI Terminals (`devenv_linux_gui_apps`):** `ghostty`, `warp` (`warp-terminal`) — installed via APT repository
+  (Warp) and native apt / snap / Ubuntu PPA fallback (Ghostty) when `devenv_install_gui_casks: true` on Debian/Ubuntu
+  systems.
 - **Purged Duplicate Packages (`devenv_packages_remove`):** `nvm`, `node` (**JavaScript / Node.js**) — purged when
   `devenv_remove_unmanaged: true` to prevent conflicts with `nvm.fish`.
 
