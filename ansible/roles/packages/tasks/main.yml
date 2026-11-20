@@ -60,3 +60,139 @@
     - devenv_system == 'Linux'
     - devenv_brew_bin is defined
     - devenv_brew_bin | length > 0
+
+- name: Probe Warp terminal binary
+  ansible.builtin.command: which warp-terminal
+  register: warp_terminal_which
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - warp_terminal_which.rc != 0
+
+- name: Fetch and dearmor Warp GPG signing key
+  ansible.builtin.command:
+    cmd: >-
+      sh -c 'curl -fsSL https://releases.warp.dev/linux/keys/warp.asc | gpg --dearmor -o /etc/apt/keyrings/warpdotdev.gpg'
+    creates: /etc/apt/keyrings/warpdotdev.gpg
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - warp_terminal_which.rc != 0
+
+- name: Configure Warp APT repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/warpdotdev.list
+    content: "deb [arch={{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else ('arm64' if ansible_facts['architecture'] in ['aarch64', 'arm64'] else ansible_facts['architecture']) }} signed-by=/etc/apt/keyrings/warpdotdev.gpg] https://releases.warp.dev/linux/deb stable main\n"
+    mode: "0644"
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - warp_terminal_which.rc != 0
+
+- name: Install Warp terminal via apt
+  ansible.builtin.apt:
+    name: warp-terminal
+    state: present
+    update_cache: true
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - warp_terminal_which.rc != 0
+
+- name: Probe Ghostty binary
+  ansible.builtin.command: which ghostty
+  register: ghostty_which
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+
+- name: Probe native Ghostty apt package availability
+  ansible.builtin.command: apt-cache show ghostty
+  register: ghostty_apt_cache
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+
+- name: Install Ghostty via native apt
+  ansible.builtin.apt:
+    name: ghostty
+    state: present
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+    - ghostty_apt_cache.rc == 0
+
+- name: Probe snap command
+  ansible.builtin.command: which snap
+  register: snap_which
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+    - ghostty_apt_cache.rc != 0
+
+- name: Install Ghostty via snap
+  ansible.builtin.command: snap install ghostty --classic
+  become: "{{ devenv_become_package_install | bool }}"
+  changed_when: true
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+    - ghostty_apt_cache.rc != 0
+    - snap_which.rc == 0
+
+- name: Add Ghostty PPA on Ubuntu
+  ansible.builtin.apt_repository:
+    repo: ppa:mkasberg/ghostty-ubuntu
+    state: present
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+    - ghostty_apt_cache.rc != 0
+    - snap_which.rc != 0
+    - ansible_facts["distribution"] == 'Ubuntu'
+
+- name: Install Ghostty from PPA on Ubuntu
+  ansible.builtin.apt:
+    name: ghostty
+    state: present
+    update_cache: true
+  become: "{{ devenv_become_package_install | bool }}"
+  when:
+    - devenv_pkg_backend == 'apt'
+    - devenv_install_gui_casks | bool
+    - ghostty_which.rc != 0
+    - ghostty_apt_cache.rc != 0
+    - snap_which.rc != 0
+    - ansible_facts["distribution"] == 'Ubuntu'

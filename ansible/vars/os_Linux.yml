@@ -5,6 +5,9 @@ devenv_pkg_skip:
   - neovim
   - go
 devenv_casks: []
+devenv_linux_gui_apps:
+  - ghostty
+  - warp
 devenv_brew_taps: []
 
 # Neovim source for this platform (see comment in group_vars/all.yml)

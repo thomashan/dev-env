@@ -1,0 +1,12 @@
+# ============================================================================
+# Ghostty Terminal Configuration
+# Managed by: dotfiles/ghostty/.config/ghostty/config.ghostty (symlinked via GNU Stow)
+# ============================================================================
+#
+# macOS Ghostty defaults (alt+arrow_left=esc:b and alt+arrow_right=esc:f)
+# intercept Option+Left/Right before tmux receives M-Left/M-Right, breaking
+# horizontal prefix Option+Arrow pane resizing in tmux.
+# Unbinding them allows Option+Arrow to pass through to tmux.
+
+keybind = alt+arrow_left=unbind
+keybind = alt+arrow_right=unbind

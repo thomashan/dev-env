@@ -506,7 +506,14 @@ def run_wizard(
 
         if chosen_backend == "brew":
             ans_casks = prompt_user(
-                "Install GUI casks (docker-desktop)? (true/false)",
+                "Install GUI casks (docker-desktop, ghostty, warp)? (true/false)",
+                default=str(install_gui_casks).lower(),
+                interactive=True,
+            )
+            install_gui_casks = ans_casks.lower() in ("true", "1", "yes", "y")
+        elif chosen_backend == "apt":
+            ans_casks = prompt_user(
+                "Install GUI terminal apps (ghostty, warp)? (true/false)",
                 default=str(install_gui_casks).lower(),
                 interactive=True,
             )
