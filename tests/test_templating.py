@@ -388,7 +388,6 @@ def test_unlink_symlink_assertion_expression(templar):
     assert templar(expr, vars_outside_rel) is False
 
 
-
 # --- stale ~/.config/dev-env/choices.yml must not drop new repo stow packages ---
 
 STALE_CHOICE_PACKAGES = ["bash", "conda", "fish", "nvim-kickstart", "tmux", "zsh"]
@@ -457,7 +456,6 @@ def test_stow_coverage_assertions_catch_missing_packages(templar, link_manifest,
     assert templar(expr, {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES}) is False
 
 
-
 def test_bootstrap_covers_every_manifest_package(templar, link_manifest):
     expr = set_fact_expression("bootstrap", "Cover every package referenced", "devenv_stow_packages")
     links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
@@ -469,13 +467,14 @@ def test_dotfiles_omits_packages_whose_links_are_all_skipped(templar, link_manif
     expr = set_fact_expression("dotfiles", "Omit stow packages where all links", "devenv_stow_packages")
     links = [link for link in link_manifest if not link["src"].startswith("dotfiles/bash/")]
     result = templar(expr, {"devenv_links": links, "devenv_stow_packages": ["bash", "ghostty", "zsh"]})
-    assert result == ["ghostty", "zsh"]
+    assert sorted(result) == ["ghostty", "zsh"]  # intersect order is hash-dependent
 
 
 def test_dotfiles_stow_ignore_options_name_skipped_files(templar):
     expr = set_fact_expression("dotfiles", "Determine ignore arguments", "devenv_stow_ignore_opts")
     result = templar(expr, {"devenv_skip_links": ["/home/u/.bashrc", "/home/u/.config/fish/config.fish"]})
     assert result == '--ignore="^\\.bashrc$" --ignore="^config\\.fish$"'
+
 
 # --- real ansible-playbook runs against an isolated $HOME -------------------
 
