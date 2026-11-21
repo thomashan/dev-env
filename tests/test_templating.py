@@ -442,18 +442,39 @@ def test_bootstrap_snapshots_stow_packages_before_loading_choices():
     }
 
 
-@pytest.mark.parametrize(
-    ("role", "name"),
-    [
-        ("bootstrap", "Assert stow packages cover all manifest links"),
-        ("dotfiles", "Assert stow packages cover all active link manifest packages"),
-    ],
-)
-def test_stow_coverage_assertions_catch_missing_packages(templar, link_manifest, role, name):
-    expr = task(role, name)["ansible.builtin.assert"]["that"][0]
+def test_dotfiles_stow_coverage_assertion_catches_missing_packages(templar, link_manifest):
+    expr = task("dotfiles", "Assert stow packages cover all active link manifest packages")["ansible.builtin.assert"][
+        "that"
+    ][0]
     links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
     assert templar(expr, {"devenv_links": links, "devenv_stow_packages": sorted(link_packages(links))}) is True
     assert templar(expr, {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES}) is False
+
+
+@pytest.mark.parametrize("snapshot", [True, False])
+def test_unlink_collects_repo_and_manifest_packages_despite_stale_choices(templar, group_vars, link_manifest, snapshot):
+    expr = playbook_task("unlink.yml", "Collect all stow packages to unlink")["ansible.builtin.set_fact"][
+        "devenv_all_stow_packages"
+    ]
+    links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
+    variables = {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES}
+    if snapshot:
+        variables["devenv_repo_stow_packages"] = group_vars["devenv_stow_packages"]
+    result = templar(expr, variables)
+    assert "ghostty" in result
+    assert link_packages(links) | set(NVIM_VARIANT_PACKAGES.values()) | set(STALE_CHOICE_PACKAGES) <= set(result)
+    if snapshot:
+        assert set(group_vars["devenv_stow_packages"]) <= set(result)
+    assert result == sorted(set(result))
+
+
+def test_unlink_snapshots_stow_packages_before_loading_choices():
+    names = [t.get("name", "") for t in yaml.safe_load(read(REPO_ROOT / "ansible/playbooks/unlink.yml"))[0]["tasks"]]
+    snapshot = names.index("Snapshot repository default stow packages")
+    assert names.index("Load the manifest") < snapshot < names.index("Load user choices if present")
+    assert playbook_task("unlink.yml", "Snapshot repository default")["ansible.builtin.set_fact"] == {
+        "devenv_repo_stow_packages": "{{ devenv_stow_packages }}"
+    }
 
 
 def test_bootstrap_covers_every_manifest_package(templar, link_manifest):

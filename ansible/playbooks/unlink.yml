@@ -11,6 +11,12 @@
       ansible.builtin.include_vars:
         file: "{{ devenv_repo_root }}/ansible/group_vars/all.yml"
 
+    # choices.yml may carry a stow list written before newer repo packages
+    # existed; snapshot the repo list so those packages are still unstowed.
+    - name: Snapshot repository default stow packages
+      ansible.builtin.set_fact:
+        devenv_repo_stow_packages: "{{ devenv_stow_packages }}"
+
     - name: Check for user choices
       ansible.builtin.stat:
         path: "{{ devenv_home }}/.config/dev-env/choices.yml"
@@ -40,7 +46,9 @@
     - name: Collect all stow packages to unlink (active and inactive variants)
       ansible.builtin.set_fact:
         devenv_all_stow_packages: >-
-          {{ ((devenv_stow_packages | default([])) +
+          {{ ((devenv_repo_stow_packages | default([])) +
+              (devenv_stow_packages | default([])) +
+              (devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | list) +
               (devenv_package_variants.nvim.variants.values() | map(attribute='package') | list))
              | unique | sort }}
 

@@ -71,15 +71,6 @@
     devenv_stow_packages: >-
       {{ devenv_stow_packages | union(devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | unique | list) | sort }}
 
-- name: Assert stow packages cover all manifest links
-  ansible.builtin.assert:
-    that:
-      - (devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\\1') | unique | list | difference(devenv_stow_packages)) | length == 0
-    fail_msg: >-
-      devenv_links references stow packages missing from devenv_stow_packages:
-      {{ devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | unique | list | difference(devenv_stow_packages) | join(', ') }}
-    quiet: true
-
 - name: Load OS-specific variables
   ansible.builtin.include_vars:
     file: "{{ devenv_repo_root }}/ansible/vars/os_{{ devenv_system }}.yml"
