@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-1be47b93",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-21T01:20:17.752177+00:00",
+  "updated_ts": "2026-11-21T01:20:17.752177+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1795223749-d9a0c6ba",
+      "ACT-FIND-1795223747-6358463e"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795179218-merge-stale-choices-stow-pkgs/P-1795179237-ANA-G3.8F/E-1795223172-CLA-CO5.5/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R3-001-01",
+    "symptoms": [
+      "unlink.yml still builds devenv_all_stow_packages from the stale choices.yml list, so ghostty (now stowed by the fixed install) is never unstowed by make unlink; merge repo defaults or derive packages from devenv_links."
+    ]
+  }
+}

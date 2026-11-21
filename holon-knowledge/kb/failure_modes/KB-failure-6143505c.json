@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-6143505c",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-21T01:20:17.752703+00:00",
+  "updated_ts": "2026-11-21T01:20:17.752703+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1795223749-9830e6ee",
+      "ACT-FIND-1795223747-b03eaa06"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795179218-merge-stale-choices-stow-pkgs/P-1795179237-ANA-G3.8F/E-1795223172-CLA-CO5.5/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R3-001-02",
+    "symptoms": [
+      "Bootstrap 'Assert stow packages cover all manifest links' runs right after a set_fact that guarantees it, so it can never fail; drop it or keep only the dotfiles-role assertion."
+    ]
+  }
+}
