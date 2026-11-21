@@ -40,13 +40,22 @@
 - name: Omit stow packages where all links are skipped
   ansible.builtin.set_fact:
     devenv_stow_packages: >-
-      {{ devenv_stow_packages | intersect(devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\\1') | unique | list) }}
+      {{ devenv_stow_packages | intersect(devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | unique | list) }}
   when: (devenv_skip_links | default([])) | length > 0
+
+- name: Assert stow packages cover all active link manifest packages
+  ansible.builtin.assert:
+    that:
+      - (devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\\1') | unique | list | difference(devenv_stow_packages)) | length == 0
+    fail_msg: >-
+      GNU Stow would not link these manifest packages (stale ~/.config/dev-env/choices.yml?):
+      {{ devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | unique | list | difference(devenv_stow_packages) | join(', ') }}
+    quiet: true
 
 - name: Determine ignore arguments for GNU Stow
   ansible.builtin.set_fact:
     devenv_stow_ignore_opts: >-
-      {{ (devenv_skip_links | default([]) | map('basename') | map('regex_escape') | map('regex_replace', '^(.*)$', '--ignore="^\\1$"') | list | join(' ')) }}
+      {{ (devenv_skip_links | default([]) | map('basename') | map('regex_escape') | map('regex_replace', '^(.*)$', '--ignore="^\1$"') | list | join(' ')) }}
   when: (devenv_skip_links | default([])) | length > 0
 
 - name: Timestamp for this run's backups

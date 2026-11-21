@@ -12,7 +12,12 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
+import subprocess
+import sys
+import textwrap
 import urllib.request
+from pathlib import Path
 
 import pytest
 import yaml
@@ -49,6 +54,10 @@ def set_fact_expression(role: str, name_fragment: str, key: str) -> str:
         return found["ansible.builtin.set_fact"][key]
     except KeyError:  # pragma: no cover - guards against refactors
         raise AssertionError(f"{role}: task {name_fragment!r} does not set_fact {key!r} ({fact_key})")
+
+
+def stow_packages_expr() -> str:
+    return set_fact_expression("bootstrap", "Resolve active stow packages", "devenv_stow_packages")
 
 
 def wanted_expr() -> str:
@@ -378,3 +387,268 @@ def test_unlink_symlink_assertion_expression(templar):
     }
     assert templar(expr, vars_outside_rel) is False
 
+
+# --- stale ~/.config/dev-env/choices.yml must not drop new repo stow packages ---
+
+STALE_CHOICE_PACKAGES = ["bash", "conda", "fish", "nvim-kickstart", "tmux", "zsh"]
+NVIM_VARIANT_PACKAGES = {"kickstart": "nvim-kickstart", "minimal": "nvim-minimal", "lazyvim": "nvim-lazyvim"}
+
+
+def link_packages(links: list[dict]) -> set[str]:
+    return {link["src"].split("/")[1] for link in links}
+
+
+@pytest.mark.parametrize("variant", sorted(NVIM_VARIANT_PACKAGES))
+def test_stow_packages_merges_repo_defaults_with_stale_choices(templar, group_vars, variant):
+    repo_packages = group_vars["devenv_stow_packages"]
+    assert "ghostty" in repo_packages and "ghostty" not in STALE_CHOICE_PACKAGES
+    active = NVIM_VARIANT_PACKAGES[variant]
+    result = templar(
+        stow_packages_expr(),
+        {
+            "devenv_repo_stow_packages": repo_packages,
+            "devenv_stow_packages": STALE_CHOICE_PACKAGES,
+            "devenv_selected_variants": {"nvim": variant},
+            "devenv_active_nvim_variant": variant,
+            "devenv_inactive_packages": sorted(set(NVIM_VARIANT_PACKAGES.values()) - {active}),
+        },
+    )
+    assert "ghostty" in result
+    assert active in result
+    assert not (set(NVIM_VARIANT_PACKAGES.values()) - {active}) & set(result)
+    assert set(repo_packages) - set(NVIM_VARIANT_PACKAGES.values()) <= set(result)
+    assert result == sorted(set(result))
+
+
+def test_stow_packages_falls_back_without_repo_snapshot(templar):
+    """An undefined snapshot degrades to the loaded list instead of erroring."""
+    result = templar(
+        stow_packages_expr(),
+        {
+            "devenv_stow_packages": ["zsh", "nvim-kickstart", "bash"],
+            "devenv_active_nvim_variant": "minimal",
+            "devenv_inactive_packages": ["nvim-kickstart", "nvim-lazyvim"],
+        },
+    )
+    assert result == ["bash", "nvim-minimal", "zsh"]
+
+
+def test_bootstrap_snapshots_stow_packages_before_loading_choices():
+    names = [t.get("name", "") for t in yaml.safe_load(read(REPO_ROOT / "ansible/roles/bootstrap/tasks/main.yml"))]
+    snapshot = names.index("Snapshot repository default stow packages")
+    assert snapshot < names.index("Load choices.yml if present") < names.index("Resolve active stow packages")
+    assert task("bootstrap", "Snapshot repository default")["ansible.builtin.set_fact"] == {
+        "devenv_repo_stow_packages": "{{ devenv_stow_packages }}"
+    }
+
+
+def test_dotfiles_stow_coverage_assertion_catches_missing_packages(templar, link_manifest):
+    expr = task("dotfiles", "Assert stow packages cover all active link manifest packages")["ansible.builtin.assert"][
+        "that"
+    ][0]
+    links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
+    assert templar(expr, {"devenv_links": links, "devenv_stow_packages": sorted(link_packages(links))}) is True
+    assert templar(expr, {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES}) is False
+
+
+@pytest.mark.parametrize("snapshot", [True, False])
+def test_unlink_collects_repo_and_manifest_packages_despite_stale_choices(templar, group_vars, link_manifest, snapshot):
+    expr = playbook_task("unlink.yml", "Collect all stow packages to unlink")["ansible.builtin.set_fact"][
+        "devenv_all_stow_packages"
+    ]
+    links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
+    variables = {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES}
+    if snapshot:
+        variables["devenv_repo_stow_packages"] = group_vars["devenv_stow_packages"]
+    result = templar(expr, variables)
+    assert "ghostty" in result
+    assert link_packages(links) | set(NVIM_VARIANT_PACKAGES.values()) | set(STALE_CHOICE_PACKAGES) <= set(result)
+    if snapshot:
+        assert set(group_vars["devenv_stow_packages"]) <= set(result)
+    assert result == sorted(set(result))
+
+
+def test_unlink_snapshots_stow_packages_before_loading_choices():
+    names = [t.get("name", "") for t in yaml.safe_load(read(REPO_ROOT / "ansible/playbooks/unlink.yml"))[0]["tasks"]]
+    snapshot = names.index("Snapshot repository default stow packages")
+    assert names.index("Load the manifest") < snapshot < names.index("Load user choices if present")
+    assert playbook_task("unlink.yml", "Snapshot repository default")["ansible.builtin.set_fact"] == {
+        "devenv_repo_stow_packages": "{{ devenv_stow_packages }}"
+    }
+
+
+def test_bootstrap_covers_every_manifest_package(templar, link_manifest):
+    expr = set_fact_expression("bootstrap", "Cover every package referenced", "devenv_stow_packages")
+    links = [{"src": link["src"], "dest": link["dest"]} for link in link_manifest]
+    result = templar(expr, {"devenv_links": links, "devenv_stow_packages": STALE_CHOICE_PACKAGES})
+    assert result == sorted(set(STALE_CHOICE_PACKAGES) | link_packages(links))
+
+
+def test_dotfiles_omits_packages_whose_links_are_all_skipped(templar, link_manifest):
+    expr = set_fact_expression("dotfiles", "Omit stow packages where all links", "devenv_stow_packages")
+    links = [link for link in link_manifest if not link["src"].startswith("dotfiles/bash/")]
+    result = templar(expr, {"devenv_links": links, "devenv_stow_packages": ["bash", "ghostty", "zsh"]})
+    assert sorted(result) == ["ghostty", "zsh"]  # intersect order is hash-dependent
+
+
+def test_dotfiles_stow_ignore_options_name_skipped_files(templar):
+    expr = set_fact_expression("dotfiles", "Determine ignore arguments", "devenv_stow_ignore_opts")
+    result = templar(expr, {"devenv_skip_links": ["/home/u/.bashrc", "/home/u/.config/fish/config.fish"]})
+    assert result == '--ignore="^\\.bashrc$" --ignore="^config\\.fish$"'
+
+
+# --- real ansible-playbook runs against an isolated $HOME -------------------
+
+# Records every fact set during the run so tests can inspect what the roles
+# actually resolved, without depending on callback plugins outside ansible-core.
+FACTS_CALLBACK = textwrap.dedent(
+    """
+    import json
+    import os
+
+    from ansible.plugins.callback import CallbackBase
+
+
+    class CallbackModule(CallbackBase):
+        CALLBACK_VERSION = 2.0
+        CALLBACK_TYPE = "aggregate"
+        CALLBACK_NAME = "devenv_facts_dump"
+        CALLBACK_NEEDS_ENABLED = True
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.facts = {}
+
+        def v2_runner_on_ok(self, result):
+            self.facts.update(result._result.get("ansible_facts", {}))
+
+        def v2_playbook_on_stats(self, stats):
+            with open(os.environ["DEVENV_FACTS_DUMP"], "w") as handle:
+                json.dump(self.facts, handle, default=str)
+    """
+)
+
+
+def ansible_playbook_bin() -> str | None:
+    local = Path(sys.executable).parent / "ansible-playbook"
+    return str(local) if local.is_file() else shutil.which("ansible-playbook")
+
+
+def collections_path(scratch: Path) -> str:
+    """Real collection paths, plus a fail-loud community.general stub as last resort.
+
+    site.yml references community.general modules in roles that the tag filters
+    below never execute, but ansible-playbook still resolves them at parse time.
+    """
+    real_home = Path.home()
+    paths = [str(real_home / ".local/share/dev-env/collections"), str(real_home / ".ansible/collections")]
+    modules = scratch / "ansible_collections" / "community" / "general" / "plugins" / "modules"
+    modules.mkdir(parents=True)
+    for name in ("homebrew", "homebrew_cask", "homebrew_tap"):
+        (modules / f"{name}.py").write_text(
+            "#!/usr/bin/python\nimport json\nprint(json.dumps({'failed': True, 'msg': 'community.general stub'}))\n"
+        )
+    return os.pathsep.join([*paths, str(scratch)])
+
+
+def seed_stale_choices(home: Path, choices: dict) -> None:
+    target = home / ".config" / "dev-env" / "choices.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text(yaml.safe_dump(choices))
+
+
+def run_site(tmp_path: Path, home: Path, tags: str, *extra: str) -> tuple[subprocess.CompletedProcess, dict]:
+    playbook = ansible_playbook_bin()
+    if playbook is None:
+        pytest.skip("ansible-playbook not available in this environment")
+    plugins = tmp_path / "callback_plugins"
+    plugins.mkdir(exist_ok=True)
+    (plugins / "devenv_facts_dump.py").write_text(FACTS_CALLBACK)
+    facts_file = tmp_path / f"facts-{tags.replace(',', '-')}.json"
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+        "ANSIBLE_COLLECTIONS_PATH": collections_path(tmp_path / f"collections-{tags.replace(',', '-')}"),
+        "ANSIBLE_CALLBACK_PLUGINS": str(plugins),
+        "ANSIBLE_CALLBACKS_ENABLED": "devenv_facts_dump",
+        "ANSIBLE_FORCE_COLOR": "0",
+        "ANSIBLE_NOCOLOR": "1",
+        "DEVENV_FACTS_DUMP": str(facts_file),
+    }
+    cmd = [playbook, str(REPO_ROOT / "ansible" / "site.yml"), "--tags", tags, "-e", f"devenv_home={home}", *extra]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=600, check=False)
+    facts = json.loads(facts_file.read_text()) if facts_file.exists() else {}
+    return proc, facts
+
+
+@pytest.mark.parametrize(
+    ("variant", "skip_basename"),
+    [("minimal", None), ("kickstart", ".bashrc")],
+)
+def test_ansible_bootstrap_resolves_stow_packages_with_stale_choices(tmp_path, variant, skip_basename):
+    home = tmp_path / "home"
+    other_variant = "nvim-kickstart" if variant == "minimal" else "nvim-minimal"
+    choices = {
+        "devenv_selected_variants": {"nvim": variant},
+        # Stale: written before ghostty existed, and still naming the other variant.
+        "devenv_stow_packages": ["bash", "conda", "fish", other_variant, "tmux", "zsh"],
+    }
+    skipped = str(home / skip_basename) if skip_basename else None
+    if skipped:
+        choices["devenv_skip_links"] = [skipped]
+    seed_stale_choices(home, choices)
+
+    proc, facts = run_site(tmp_path, home, "bootstrap", "--check")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    packages = facts["devenv_stow_packages"]
+    links = facts["devenv_links"]
+    assert "ghostty" in packages
+    assert NVIM_VARIANT_PACKAGES[variant] in packages
+    assert not (set(NVIM_VARIANT_PACKAGES.values()) - {NVIM_VARIANT_PACKAGES[variant]}) & set(packages)
+    assert link_packages(links) <= set(packages)
+    assert any(link["dest"] == str(home / ".config/ghostty/config.ghostty") for link in links)
+    assert set(packages) <= {p.name for p in (REPO_ROOT / "dotfiles").iterdir() if p.is_dir()}
+    if skipped:
+        assert skipped not in {link["dest"] for link in links}
+        assert "bash" in packages  # .bash_profile is still managed
+
+
+@pytest.mark.skipif(shutil.which("stow") is None, reason="stow not available on PATH")
+@pytest.mark.parametrize("skip_zshrc", [False, True])
+def test_ansible_dotfiles_converge_with_stale_choices_and_stow(tmp_path, link_manifest, skip_zshrc):
+    home = tmp_path / "stow_home"
+    skipped = home / ".zshrc"
+    seed_stale_choices(
+        home,
+        {
+            "devenv_selected_variants": {"nvim": "kickstart"},
+            "devenv_stow_packages": STALE_CHOICE_PACKAGES,
+            "devenv_skip_links": [str(skipped)] if skip_zshrc else [],
+        },
+    )
+    if skip_zshrc:
+        skipped.write_text("# user-owned, must survive the converge\n")
+
+    proc, facts = run_site(tmp_path, home, "dotfiles")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Assert the link manifest is fully satisfied" in proc.stdout
+
+    # kickstart without skips never re-sets devenv_links, so fall back to the manifest.
+    default_links = [{**link, "dest": link["dest"].replace("{{ devenv_home }}", str(home))} for link in link_manifest]
+    links = facts.get("devenv_links", default_links)
+    assert links
+    for link in links:
+        dest = Path(link["dest"])
+        assert dest.is_symlink(), f"{dest} is not a symlink"
+        assert dest.resolve() == (REPO_ROOT / link["src"]).resolve()
+
+    if skip_zshrc:
+        assert not skipped.is_symlink()
+        assert skipped.read_text() == "# user-owned, must survive the converge\n"
+        assert "zsh" not in facts["devenv_stow_packages"]
+
+    ghostty = home / ".config" / "ghostty" / "config.ghostty"
+    assert ghostty.is_symlink()
+    assert ghostty.resolve() == (REPO_ROOT / "dotfiles/ghostty/.config/ghostty/config.ghostty").resolve()

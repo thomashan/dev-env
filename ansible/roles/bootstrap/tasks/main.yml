@@ -9,6 +9,13 @@
     devenv_arch: "{{ ansible_facts.architecture }}"
     devenv_pkg_backend: "{{ devenv_backend_for_system.get(ansible_facts.system, 'unsupported') }}"
 
+# choices.yml is written once by the wizard, so the stow list it carries goes
+# stale whenever the repo grows a new package. Keep the repo's list so it can be
+# merged back in below instead of being silently overwritten by include_vars.
+- name: Snapshot repository default stow packages
+  ansible.builtin.set_fact:
+    devenv_repo_stow_packages: "{{ devenv_stow_packages }}"
+
 - name: Check if choices.yml exists
   ansible.builtin.stat:
     path: "{{ devenv_home }}/.config/dev-env/choices.yml"
@@ -30,7 +37,8 @@
 - name: Resolve active stow packages
   ansible.builtin.set_fact:
     devenv_stow_packages: >-
-      {{ ((devenv_stow_packages | difference(devenv_inactive_packages)) + [devenv_package_variants.nvim.variants[devenv_active_nvim_variant].package]) | unique | sort }}
+      {{ (((devenv_repo_stow_packages | default(devenv_stow_packages)) | union(devenv_stow_packages) | difference(devenv_inactive_packages))
+         + [devenv_package_variants.nvim.variants[devenv_active_nvim_variant].package]) | unique | sort }}
 
 - name: Update link manifest for minimal nvim variant
   ansible.builtin.set_fact:
@@ -55,6 +63,13 @@
   ansible.builtin.set_fact:
     devenv_links: "{{ devenv_links | rejectattr('dest', 'in', devenv_skip_links | default([])) | list }}"
   when: (devenv_skip_links | default([])) | length > 0
+
+# Backreference escaping differs by context in ansible-core: '\1' inside a
+# {{ }} template, but '\\1' in a bare `that:`/`when:` expression.
+- name: Cover every package referenced by the link manifest
+  ansible.builtin.set_fact:
+    devenv_stow_packages: >-
+      {{ devenv_stow_packages | union(devenv_links | map(attribute='src') | map('regex_replace', '^dotfiles/([^/]+)/.*$', '\1') | unique | list) | sort }}
 
 - name: Load OS-specific variables
   ansible.builtin.include_vars:
