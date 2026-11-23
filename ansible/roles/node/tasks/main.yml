@@ -49,6 +49,12 @@
     state: directory
     mode: "0755"
 
+- name: Ensure unified nvm versions/node directory exists
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.local/share/nvm/versions/node"
+    state: directory
+    mode: "0755"
+
 - name: Install official nvm script
   ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/nvm.sh
@@ -58,11 +64,11 @@
 - name: Install the pinned node through nvm
   ansible.builtin.command:
     cmd: fish -c "nvm install {{ devenv_node_version }}"
-    creates: "{{ devenv_home }}/.local/share/nvm/v{{ devenv_node_version }}/bin/node"
+    creates: "{{ devenv_home }}/.local/share/nvm/versions/node/v{{ devenv_node_version }}/bin/node"
 
 - name: Point `current` at the pinned version (PATH entry for non-interactive shells)
   ansible.builtin.file:
-    src: "{{ devenv_home }}/.local/share/nvm/v{{ devenv_node_version }}"
+    src: "{{ devenv_home }}/.local/share/nvm/versions/node/v{{ devenv_node_version }}"
     dest: "{{ devenv_home }}/.local/share/nvm/current"
     state: link
     force: true

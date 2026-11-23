@@ -829,12 +829,13 @@ def test_login_shell_and_gui_casks_defaults(group_vars) -> None:
 
 
 def test_fish_nvm_path_resolution_in_conf_d() -> None:
-    """00-devenv.fish must define XDG_DATA_HOME, unified nvm_data, fallback links, and prepend nvm bin."""
+    """00-devenv.fish must define XDG_DATA_HOME, unified nvm_data, one-way migration, and prepend nvm bin."""
     content = read(REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "conf.d" / "00-devenv.fish")
     assert 'set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"' in content
     assert "set -g nvm_data $XDG_DATA_HOME/nvm/versions/node" in content
-    assert "$XDG_DATA_HOME/nvm/versions/node" in content
-    assert "ln -sfn" in content
+    assert "v[0-9]*" in content
+    assert '-name "v*"' not in content
+    assert "$XDG_DATA_HOME/nvm/$vname" not in content
     assert 'fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"' in content
 
 
@@ -857,9 +858,7 @@ def test_multishell_nvm_and_node_parity() -> None:
 
         # Assert NVM current binary path and ~/.local/bin precedence re-assertion after Homebrew
         assert "$HOME/.local/bin" in content, f"missing ~/.local/bin PATH inclusion in {shell_name}"
-        assert "$NVM_DIR/current/bin" in content, (
-            f"missing nvm current/bin PATH inclusion in {shell_name}"
-        )
+        assert "$NVM_DIR/current/bin" in content, f"missing nvm current/bin PATH inclusion in {shell_name}"
         # Ensure NVM precedence re-assertion appears after Homebrew evaluation
         brew_idx = content.find("brew shellenv")
         nvm_precedence_idx = content.find('export PATH="$NVM_DIR/current/bin:$PATH"')
@@ -883,9 +882,7 @@ def test_multishell_conda_and_homebrew_parity() -> None:
         # Multi-OS Homebrew evaluation guarded when /opt/homebrew/bin is already on PATH
         assert "brew shellenv" in content, f"missing brew shellenv in {shell_name}"
         assert "/opt/homebrew/bin/brew" in content, f"missing Apple Silicon brew path in {shell_name}"
-        assert '*":/opt/homebrew/bin:"*' in content, (
-            f"missing /opt/homebrew/bin PATH guard in {shell_name}"
-        )
+        assert '*":/opt/homebrew/bin:"*' in content, f"missing /opt/homebrew/bin PATH guard in {shell_name}"
 
         # Conda probe and hook evaluation logic
         assert "miniforge3" in content, f"missing miniforge3 probe in {shell_name}"
@@ -985,6 +982,3 @@ def test_ci_workflow_mandates_ansible_checks() -> None:
     runs = [s.get("run", "") for s in steps]
     assert any("make check-syntax" in run for run in runs), "Missing make check-syntax step in make.yml"
     assert any("make check-mode" in run for run in runs), "Missing make check-mode step in make.yml"
-
-
-

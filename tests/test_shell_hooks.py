@@ -627,3 +627,75 @@ fi
     assert any(token in kv.get("TYPE", "") for token in ("alias", "function")), (
         f"{shell_name} {flags} did not define conda alias/function for micromamba: {proc.stdout}"
     )
+
+
+def test_fish_nvm_migration_and_no_versions_symlink_loop(tmp_path: Path) -> None:
+    """Verify 00-devenv.fish cleans recursive versions symlink, migrates legacy v* dirs one-way, and fixes current."""
+    fish_bin = _require_shell("fish")
+    fish_dir = str(Path(fish_bin).resolve().parent)
+
+    fake_home = tmp_path / "nvm_home"
+    _link_repo_dotfiles(fake_home)
+
+    nvm_root = fake_home / ".local" / "share" / "nvm"
+    versions_node = nvm_root / "versions" / "node"
+    versions_node.mkdir(parents=True, exist_ok=True)
+
+    # 1. Legacy flat real directory v24.18.0 + forward symlink versions/node/v24.18.0 -> ~/.local/share/nvm/v24.18.0
+    legacy_v24 = nvm_root / "v24.18.0"
+    _write_executable(legacy_v24 / "bin" / "node", "#!/bin/sh\necho v24.18.0\n")
+    (versions_node / "v24.18.0").symlink_to(legacy_v24)
+
+    # 2. Bogus recursive symlink versions/node/versions -> ~/.local/share/nvm/versions
+    (versions_node / "versions").symlink_to(nvm_root / "versions")
+
+    # 3. Dangling flat back-symlink ~/.local/share/nvm/v22.0.0 -> versions/node/v22.0.0
+    (nvm_root / "v22.0.0").symlink_to(versions_node / "v22.0.0")
+
+    # 4. Real unified directory versions/node/v26.13.1
+    real_v26 = versions_node / "v26.13.1"
+    _write_executable(real_v26 / "bin" / "node", "#!/bin/sh\necho v26.13.1\n")
+
+    # 5. Dangling current symlink pointing to legacy ~/.local/share/nvm/v26.13.1
+    (nvm_root / "current").symlink_to(nvm_root / "v26.13.1")
+
+    env_args = [
+        "env",
+        "-i",
+        f"HOME={fake_home}",
+        "USER=testuser",
+        "TERM=dumb",
+        f"PATH={fish_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
+        fish_bin,
+        "-lc",
+        "true",
+    ]
+
+    for _ in range(2):
+        proc = subprocess.run(env_args, capture_output=True, text=True, check=False)
+        assert proc.returncode == 0, f"fish -lc failed:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+
+        # Recursive versions/node/versions symlink removed and not recreated
+        assert not (versions_node / "versions").exists()
+        assert not (versions_node / "versions").is_symlink()
+
+        # Legacy v24.18.0 migrated into real directory under versions/node/v24.18.0, flat path gone
+        assert (versions_node / "v24.18.0").is_dir()
+        assert not (versions_node / "v24.18.0").is_symlink()
+        assert (versions_node / "v24.18.0" / "bin" / "node").is_file()
+        assert not (nvm_root / "v24.18.0").exists()
+        assert not (nvm_root / "v24.18.0").is_symlink()
+
+        # Dangling flat symlink v22.0.0 removed
+        assert not (nvm_root / "v22.0.0").exists()
+        assert not (nvm_root / "v22.0.0").is_symlink()
+
+        # No flat back-symlink created for v26.13.1
+        assert (versions_node / "v26.13.1").is_dir()
+        assert not (versions_node / "v26.13.1").is_symlink()
+        assert not (nvm_root / "v26.13.1").exists()
+        assert not (nvm_root / "v26.13.1").is_symlink()
+
+        # Dangling current symlink repaired to versions/node/v26.13.1
+        assert (nvm_root / "current").is_symlink()
+        assert (nvm_root / "current").resolve() == real_v26.resolve()

@@ -11,6 +11,7 @@ devenv_pkg_aliases:
   neovim: neovim           # Debian stable ships an old Neovim; skipped in devenv_pkg_skip with devenv_neovim_source: brew (0.12+)
   tmux: tmux
   fish: fish
+  zsh: zsh
   ripgrep: ripgrep
   fd: fd-find
   fzf: fzf

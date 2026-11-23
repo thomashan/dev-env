@@ -93,6 +93,7 @@ devenv_packages_core:
   - neovim
   - tmux
   - fish
+  - zsh
   - ripgrep
   - fd
   - fzf
