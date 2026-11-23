@@ -210,7 +210,7 @@ bootstrap:
 	@if [ -d "$(COLLECTIONS)/ansible_collections/community/general" ]; then \
 		echo "Ansible collections: ok (already installed in $(COLLECTIONS))"; \
 	else \
-		ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
+		ANSIBLE_CONFIG="$(SELF_DIR)/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" ANSIBLE_COLLECTIONS_SCAN_SYS_PATH=False "$(GALAXY)" collection install \
 			-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
 	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"

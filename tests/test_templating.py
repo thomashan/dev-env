@@ -638,12 +638,13 @@ def test_ansible_bootstrap_resolves_stow_packages_with_stale_choices(tmp_path, v
 def test_ansible_dotfiles_converge_with_stale_choices_and_stow(tmp_path, link_manifest, skip_zshrc):
     home = tmp_path / "stow_home"
     skipped = home / ".zshrc"
+    zprofile = home / ".zprofile"
     seed_stale_choices(
         home,
         {
             "devenv_selected_variants": {"nvim": "kickstart"},
             "devenv_stow_packages": STALE_CHOICE_PACKAGES,
-            "devenv_skip_links": [str(skipped)] if skip_zshrc else [],
+            "devenv_skip_links": [str(skipped), str(zprofile)] if skip_zshrc else [],
         },
     )
     if skip_zshrc:
@@ -664,6 +665,7 @@ def test_ansible_dotfiles_converge_with_stale_choices_and_stow(tmp_path, link_ma
 
     if skip_zshrc:
         assert not skipped.is_symlink()
+        assert not zprofile.is_symlink()
         assert skipped.read_text() == "# user-owned, must survive the converge\n"
         assert "zsh" not in facts["devenv_stow_packages"]
 

@@ -23,11 +23,12 @@ def test_makefile_configure_python_fallback() -> None:
 
 
 def test_makefile_galaxy_collection_install_isolated() -> None:
-    """Ansible Galaxy collection install explicitly isolates to COLLECTIONS path."""
+    """Ansible Galaxy collection install explicitly isolates to COLLECTIONS path and disables sys.path scanning."""
     makefile = read(REPO_ROOT / "Makefile")
     bootstrap_target = makefile.split("\nbootstrap:")[1].split("\nconfigure:")[0]
     assert '-p "$(COLLECTIONS)"' in bootstrap_target
     assert 'ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)"' in bootstrap_target
+    assert "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH=False" in bootstrap_target
 
 
 def test_ansible_cfg_collections_path_fallback() -> None:
@@ -443,11 +444,12 @@ def test_node_role_clean_env_shell_probes_and_canonical_path_assertions() -> Non
 
 
 def test_fish_role_find_follows_stow_symlinks() -> None:
-    """Fish role Collect linked fish files task sets follow: true so GNU Stow symlinks are syntax-checked."""
+    """Fish role Collect linked fish files task sets follow: true and file_type: any so GNU Stow symlinks are syntax-checked."""
     fish_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "fish" / "tasks" / "main.yml"))
     collect_task = next((t for t in fish_tasks if t.get("name") == "Collect linked fish files"), None)
     assert collect_task is not None, "Missing 'Collect linked fish files' task in fish role"
     assert collect_task.get("ansible.builtin.find", {}).get("follow") is True
+    assert collect_task.get("ansible.builtin.find", {}).get("file_type") == "any"
 
 
 def test_homebrew_module_tasks_pass_dirname_to_path() -> None:
