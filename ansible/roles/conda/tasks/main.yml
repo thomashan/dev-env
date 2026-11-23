@@ -10,6 +10,7 @@
   register: devenv_which_conda
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Stat candidate Conda binaries
   ansible.builtin.stat:
@@ -73,6 +74,7 @@
   register: devenv_conda_info_base
   changed_when: false
   failed_when: false
+  check_mode: false
   when: devenv_discovered_conda_bin | length > 0
 
 - name: Resolve discovered Conda root directory
@@ -153,6 +155,7 @@
     cmd: "{{ devenv_conda_bin }} --version"
   register: devenv_conda_version
   changed_when: false
+  check_mode: false
 
 - name: Show conda version
   ansible.builtin.debug:

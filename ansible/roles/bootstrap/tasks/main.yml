@@ -8,6 +8,12 @@
     devenv_system: "{{ ansible_facts.system }}"
     devenv_arch: "{{ ansible_facts.architecture }}"
     devenv_pkg_backend: "{{ devenv_backend_for_system.get(ansible_facts.system, 'unsupported') }}"
+    devenv_is_wsl: >-
+      {{ (ansible_facts.system == 'Linux') and
+         (('microsoft' in (ansible_facts.kernel | default('') | lower)) or
+          ('wsl' in (ansible_facts.kernel | default('') | lower)) or
+          (((ansible_facts.env | default({})).WSL_DISTRO_NAME | default('')) | length > 0) or
+          (((ansible_facts.env | default({})).WSL_INTEROP | default('')) | length > 0)) }}
 
 # choices.yml is written once by the wizard, so the stow list it carries goes
 # stale whenever the repo grows a new package. Keep the repo's list so it can be
@@ -112,7 +118,7 @@
 - name: Show resolved plan
   ansible.builtin.debug:
     msg:
-      - "platform   : {{ devenv_system }}/{{ devenv_arch }}  backend: {{ devenv_pkg_backend }}"
+      - "platform   : {{ devenv_system }}/{{ devenv_arch }}  backend: {{ devenv_pkg_backend }}  wsl: {{ devenv_is_wsl }}"
       - "packages   : {{ devenv_packages_concrete | length }} concrete ({{ devenv_pkg_skip | default([]) | join(',') }} skipped as OS-provided)"
       - "python pin : {{ devenv_python_version }}   conda dir: {{ devenv_conda_dir }}"
       - "repo root  : {{ devenv_repo_root }}"

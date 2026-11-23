@@ -497,6 +497,99 @@ def test_dotfiles_stow_ignore_options_name_skipped_files(templar):
     assert result == '--ignore="^\\.bashrc$" --ignore="^config\\.fish$"'
 
 
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [
+        (
+            {"system": "Linux", "kernel": "5.15.153.1-microsoft-standard-WSL2", "env": {}},
+            True,
+        ),
+        (
+            {"system": "Linux", "kernel": "4.4.0-19041-Microsoft", "env": {}},
+            True,
+        ),
+        (
+            {"system": "Linux", "kernel": "6.6.0-custom", "env": {"WSL_DISTRO_NAME": "Ubuntu"}},
+            True,
+        ),
+        (
+            {"system": "Linux", "kernel": "6.6.0-custom", "env": {"WSL_INTEROP": "/run/WSL/12_interop"}},
+            True,
+        ),
+        (
+            {"system": "Linux", "kernel": "6.8.0-45-generic", "env": {}},
+            False,
+        ),
+        (
+            {"system": "Darwin", "kernel": "23.6.0", "env": {"WSL_DISTRO_NAME": "Ubuntu"}},
+            False,
+        ),
+    ],
+)
+def test_bootstrap_devenv_is_wsl_classification(templar, facts: dict, expected: bool) -> None:
+    """devenv_is_wsl evaluates True on WSL kernels/env vars and False on native Linux or macOS."""
+    expr = set_fact_expression("bootstrap", "Classify host platform", "devenv_is_wsl")
+    assert bool(templar(expr, {"ansible_facts": facts})) is expected
+
+
+def test_packages_wsl_guards_and_winget_conditions(templar) -> None:
+    """Linux GUI terminal tasks skip on WSL, while winget.exe tasks run only on WSL when GUI apps are enabled."""
+    linux_probe = task("packages", "Probe Warp terminal binary")
+    linux_when = linux_probe["when"]
+    assert all(
+        bool(templar(cond, {"devenv_pkg_backend": "apt", "devenv_install_gui_casks": True, "devenv_is_wsl": False}))
+        for cond in linux_when
+    )
+    assert not all(
+        bool(templar(cond, {"devenv_pkg_backend": "apt", "devenv_install_gui_casks": True, "devenv_is_wsl": True}))
+        for cond in linux_when
+    )
+
+    winget_install = task("packages", "Install Warp on Windows host via winget.exe from WSL")
+    winget_when = winget_install["when"]
+    base_wsl_vars = {
+        "devenv_is_wsl": True,
+        "devenv_install_gui_casks": True,
+        "devenv_wsl_winget_which": {"rc": 0, "stdout": "/mnt/c/Users/dev/AppData/Local/Microsoft/WindowsApps/winget.exe"},
+        "devenv_wsl_warp_probe": {"rc": 1, "stdout": "No installed package found matching input criteria."},
+    }
+    assert all(bool(templar(cond, base_wsl_vars)) for cond in winget_when)
+    assert not all(bool(templar(cond, {**base_wsl_vars, "devenv_is_wsl": False})) for cond in winget_when)
+    assert not all(
+        bool(templar(cond, {**base_wsl_vars, "devenv_wsl_warp_probe": {"rc": 0, "stdout": "Warp  Warp.Warp  v0.2025"}}))
+        for cond in winget_when
+    )
+
+
+def test_playbooks_syntax_check_zero_deprecation_warnings(tmp_path: Path) -> None:
+    """ansible-playbook --syntax-check passes with zero deprecation warnings on site.yml and unlink.yml."""
+    playbook = ansible_playbook_bin()
+    if playbook is None:
+        pytest.skip("ansible-playbook not available in this environment")
+    env = {
+        **os.environ,
+        "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+        "ANSIBLE_COLLECTIONS_PATH": collections_path(tmp_path / "collections-syntax"),
+        "ANSIBLE_DEPRECATION_WARNINGS": "True",
+        "ANSIBLE_FORCE_COLOR": "0",
+        "ANSIBLE_NOCOLOR": "1",
+    }
+    for rel_playbook in ("ansible/site.yml", "ansible/playbooks/unlink.yml"):
+        proc = subprocess.run(
+            [playbook, str(REPO_ROOT / rel_playbook), "--syntax-check"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert proc.returncode == 0, f"{rel_playbook} syntax check failed:\n{proc.stdout}\n{proc.stderr}"
+        assert "[DEPRECATION WARNING]" not in proc.stderr, (
+            f"{rel_playbook} emitted deprecation warning:\n{proc.stderr}"
+        )
+
+
 # --- real ansible-playbook runs against an isolated $HOME -------------------
 
 # Records every fact set during the run so tests can inspect what the roles
