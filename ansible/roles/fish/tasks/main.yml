@@ -9,6 +9,7 @@
       - "{{ devenv_home }}/.config/fish/conf.d"
     patterns: "*.fish"
     file_type: file
+    follow: true
     recurse: false
   register: devenv_fish_files
 

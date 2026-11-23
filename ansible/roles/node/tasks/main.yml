@@ -90,22 +90,40 @@
     - npm
     - npx
 
+- name: Check if bash is available
+  ansible.builtin.command:
+    cmd: which bash
+  register: devenv_has_bash
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 - name: Verify which node a login shell resolves in Bash
   ansible.builtin.command:
-    cmd: bash -lc "which node; node -v"
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}" TERM=dumb
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_has_bash.stdout | trim) | dirname }}"
+      bash -lc "which node; node -v"
+    expand_argument_vars: false
   register: devenv_node_which_bash
+  when:
+    - not ansible_check_mode
+    - devenv_has_bash.rc == 0
   changed_when: false
   check_mode: false
 
 - name: Assert nvm-managed node wins on PATH in Bash
   ansible.builtin.assert:
     that:
-      - "'.local/share/nvm/current/bin/node' in devenv_node_which_bash.stdout or '.local/bin/node' in devenv_node_which_bash.stdout"
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which_bash.stdout or '.local/bin/node' in devenv_node_which_bash.stdout or ('.local/share/nvm/versions/node/v' ~ devenv_node_version ~ '/bin/node') in devenv_node_which_bash.stdout"
       - "'v' ~ devenv_node_version in devenv_node_which_bash.stdout"
     fail_msg: |
       node did not resolve to pinned version in Bash. Resolved:
-      {{ devenv_node_which_bash.stdout_lines | join(' | ') }}
+      {{ devenv_node_which_bash.stdout_lines | default([]) | join(' | ') }}
     quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_has_bash.rc == 0
 
 - name: Check if zsh is available
   ansible.builtin.command:
@@ -117,43 +135,69 @@
 
 - name: Verify which node a login shell resolves in Zsh
   ansible.builtin.command:
-    cmd: zsh -lc "which node; node -v"
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}" TERM=dumb
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_has_zsh.stdout | trim) | dirname }}"
+      zsh -lc "which node; node -v"
+    expand_argument_vars: false
   register: devenv_node_which_zsh
-  when: devenv_has_zsh.rc == 0
+  when:
+    - not ansible_check_mode
+    - devenv_has_zsh.rc == 0
   changed_when: false
   check_mode: false
 
 - name: Assert nvm-managed node wins on PATH in Zsh
   ansible.builtin.assert:
     that:
-      - "'.local/share/nvm/current/bin/node' in devenv_node_which_zsh.stdout or '.local/bin/node' in devenv_node_which_zsh.stdout"
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which_zsh.stdout or '.local/bin/node' in devenv_node_which_zsh.stdout or ('.local/share/nvm/versions/node/v' ~ devenv_node_version ~ '/bin/node') in devenv_node_which_zsh.stdout"
       - "'v' ~ devenv_node_version in devenv_node_which_zsh.stdout"
     fail_msg: |
       node did not resolve to pinned version in Zsh. Resolved:
       {{ devenv_node_which_zsh.stdout_lines | default([]) | join(' | ') }}
     quiet: true
-  when: devenv_has_zsh.rc == 0
+  when:
+    - not ansible_check_mode
+    - devenv_has_zsh.rc == 0
+
+- name: Check if fish is available
+  ansible.builtin.command:
+    cmd: which fish
+  register: devenv_has_fish
+  changed_when: false
+  failed_when: false
+  check_mode: false
 
 - name: Verify which node a login shell resolves
   ansible.builtin.command:
-    cmd: fish -lc "which node; node -v"
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}" TERM=dumb
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_has_fish.stdout | trim) | dirname }}"
+      fish -lc "which node; node -v"
+    expand_argument_vars: false
   register: devenv_node_which
+  when:
+    - not ansible_check_mode
+    - devenv_has_fish.rc == 0
   changed_when: false
   check_mode: false
 
 - name: Assert nvm-managed node wins on PATH
   ansible.builtin.assert:
     that:
-      - "'.local/share/nvm/current/bin/node' in devenv_node_which.stdout or '.local/bin/node' in devenv_node_which.stdout"
+      - "'.local/share/nvm/current/bin/node' in devenv_node_which.stdout or '.local/bin/node' in devenv_node_which.stdout or ('.local/share/nvm/versions/node/v' ~ devenv_node_version ~ '/bin/node') in devenv_node_which.stdout"
       - "'v' ~ devenv_node_version in devenv_node_which.stdout"
     fail_msg: |
       node did not resolve through nvm. Resolved:
-      {{ devenv_node_which.stdout_lines | join(' | ') }}
+      {{ devenv_node_which.stdout_lines | default([]) | join(' | ') }}
       Likely cause: another PATH entry (brew node, ~/.local/bin/node from an
       agent runtime) precedes $XDG_DATA_HOME/nvm/current/bin. Fix the PATH
       order in dotfiles/fish/.config/fish/config.fish or remove the competitor with
       devenv_remove_unmanaged: true.
     quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_has_fish.rc == 0
 
 - name: Stat CA certificates directory
   ansible.builtin.stat:
