@@ -58,6 +58,7 @@
       nvim --headless -c 'lua local n=#vim.pack.get() io.write("packages=" .. n)' -c 'qa'
   register: devenv_nvim_pkgs
   changed_when: false
+  failed_when: false
   check_mode: false
   tags: [nvim-sync]
   when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'

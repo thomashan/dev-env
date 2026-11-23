@@ -242,10 +242,10 @@ check-mode:
 
 check-syntax:
 	@if command -v uv >/dev/null 2>&1; then \
-		$(ANSIBLE_ENV) uv run --extra test ansible-playbook "$(SITE)" --syntax-check $(ANSIBLE_EXTRA); \
+		$(ANSIBLE_ENV) uv run --extra test ansible-playbook "$(SITE)" --syntax-check $(ANSIBLE_EXTRA) && \
 		$(ANSIBLE_ENV) uv run --extra test ansible-playbook "$(SELF_DIR)/ansible/playbooks/unlink.yml" --syntax-check $(ANSIBLE_EXTRA); \
 	else \
-		$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --syntax-check $(ANSIBLE_EXTRA); \
+		$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --syntax-check $(ANSIBLE_EXTRA) && \
 		$(ANSIBLE_ENV) "$(PB)" "$(SELF_DIR)/ansible/playbooks/unlink.yml" --syntax-check $(ANSIBLE_EXTRA); \
 	fi
 

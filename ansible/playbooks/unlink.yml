@@ -43,6 +43,7 @@
           GNU Stow was not found on PATH. stow is required for unlinking managed dotfiles.
           Please install stow first.
         quiet: true
+      when: not ansible_check_mode
 
     - name: Collect all stow packages to unlink (active and inactive variants)
       ansible.builtin.set_fact:
@@ -83,6 +84,7 @@
           -d "{{ devenv_repo_root }}/dotfiles"
           -t "{{ devenv_home }}"
           {{ devenv_all_stow_packages | join(' ') }}
+      when: devenv_stow_bin.rc == 0
       register: devenv_stow_unlink
       changed_when: "'UNLINK:' in devenv_stow_unlink.stderr"
       failed_when: false

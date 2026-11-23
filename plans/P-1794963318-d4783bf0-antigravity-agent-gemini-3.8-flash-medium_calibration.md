@@ -58,9 +58,8 @@
 ## 4. Calibration Assessment
 
 Plan `P-1794963318-d4783bf0-antigravity-agent-gemini-3.8-flash-medium` executed with minimal error
-($p\_success\_error =
-0.02$, $cost\_error = 0.16$). The calibration step successfully completed the execution lifecycle
-and delivered verified post-execution analysis.
+(`p_success_error = 0.02`, `cost_error = 0.16`). The calibration step successfully completed the execution lifecycle and
+delivered verified post-execution analysis.
 
 ---
 

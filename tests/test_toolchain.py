@@ -68,6 +68,7 @@ def test_makefile_check_syntax_target() -> None:
     assert "$(ANSIBLE_ENV)" in syntax_recipe
     assert '"$(SITE)"' in syntax_recipe
     assert '"$(SELF_DIR)/ansible/playbooks/unlink.yml"' in syntax_recipe
+    assert "&&" in syntax_recipe
 
 
 def test_makefile_bootstrap_ca_injection() -> None:
