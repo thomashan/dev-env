@@ -328,3 +328,9 @@ def test_ansible_static_task_hygiene() -> None:
 
                 if task_def.get("changed_when") is False or "ansible_check_mode" in cmd_str:
                     assert task_def.get("check_mode") is False, f"{label} must declare check_mode: false"
+                if "ansible_check_mode" in cmd_str:
+                    when_cond = task_def.get("when", "")
+                    when_str = " ".join(when_cond) if isinstance(when_cond, list) else str(when_cond)
+                    assert "not ansible_check_mode or devenv_stow_bin.rc == 0" in when_str, (
+                        f"{label} must guard stow dry-run execution when stow is absent in check mode"
+                    )
