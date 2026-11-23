@@ -243,3 +243,111 @@
   when: devenv_holon_source | length > 0
   register: devenv_holon
   changed_when: "'Successfully installed' in devenv_holon.stdout or 'Updated' in devenv_holon.stdout"
+
+- name: Check if fish is available for Conda clean-shell verification
+  ansible.builtin.command:
+    cmd: which fish
+  register: devenv_conda_has_fish
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Verify Conda activation in a clean Fish login shell
+  ansible.builtin.command:
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}"
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_fish.stdout | trim) | dirname }}"
+      "{{ devenv_conda_has_fish.stdout | trim }}" -lc
+      'type -t conda; echo "ENV=$CONDA_DEFAULT_ENV"; string join : $PATH'
+  register: devenv_conda_verify_fish
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_fish.rc == 0
+  changed_when: false
+  check_mode: false
+
+- name: Assert Conda function, default env, and PATH in Fish
+  ansible.builtin.assert:
+    that:
+      - "'function' in devenv_conda_verify_fish.stdout"
+      - "'ENV=base' in devenv_conda_verify_fish.stdout or ('ENV=' in devenv_conda_verify_fish.stdout and 'ENV=\n' not in devenv_conda_verify_fish.stdout)"
+      - "(devenv_conda_dir ~ '/bin') in devenv_conda_verify_fish.stdout"
+    fail_msg: |
+      Conda failed to activate in a clean Fish login shell. Output:
+      {{ devenv_conda_verify_fish.stdout_lines | default([]) | join(' | ') }}
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_fish.rc == 0
+
+- name: Check if zsh is available for Conda clean-shell verification
+  ansible.builtin.command:
+    cmd: which zsh
+  register: devenv_conda_has_zsh
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Verify Conda activation in a clean Zsh login interactive shell
+  ansible.builtin.command:
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}"
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_zsh.stdout | trim) | dirname }}"
+      "{{ devenv_conda_has_zsh.stdout | trim }}" -lic
+      'type conda; echo "ENV=${CONDA_DEFAULT_ENV:-}"; echo "PATH=$PATH"'
+  register: devenv_conda_verify_zsh
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_zsh.rc == 0
+  changed_when: false
+  check_mode: false
+
+- name: Assert Conda function, default env, and PATH in Zsh
+  ansible.builtin.assert:
+    that:
+      - "'function' in devenv_conda_verify_zsh.stdout"
+      - "'ENV=base' in devenv_conda_verify_zsh.stdout or ('ENV=' in devenv_conda_verify_zsh.stdout and 'ENV=\n' not in devenv_conda_verify_zsh.stdout)"
+      - "(devenv_conda_dir ~ '/bin') in devenv_conda_verify_zsh.stdout"
+    fail_msg: |
+      Conda failed to activate in a clean Zsh login shell. Output:
+      {{ devenv_conda_verify_zsh.stdout_lines | default([]) | join(' | ') }}
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_zsh.rc == 0
+
+- name: Check if bash is available for Conda clean-shell verification
+  ansible.builtin.command:
+    cmd: which bash
+  register: devenv_conda_has_bash
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Verify Conda activation in a clean Bash login interactive shell
+  ansible.builtin.command:
+    cmd: >-
+      env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}"
+      PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_bash.stdout | trim) | dirname }}"
+      "{{ devenv_conda_has_bash.stdout | trim }}" -lic
+      'type -t conda; echo "ENV=${CONDA_DEFAULT_ENV:-}"; echo "PATH=$PATH"'
+  register: devenv_conda_verify_bash
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_bash.rc == 0
+  changed_when: false
+  check_mode: false
+
+- name: Assert Conda function, default env, and PATH in Bash
+  ansible.builtin.assert:
+    that:
+      - "'function' in devenv_conda_verify_bash.stdout"
+      - "'ENV=base' in devenv_conda_verify_bash.stdout or ('ENV=' in devenv_conda_verify_bash.stdout and 'ENV=\n' not in devenv_conda_verify_bash.stdout)"
+      - "(devenv_conda_dir ~ '/bin') in devenv_conda_verify_bash.stdout"
+    fail_msg: |
+      Conda failed to activate in a clean Bash login shell. Output:
+      {{ devenv_conda_verify_bash.stdout_lines | default([]) | join(' | ') }}
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_conda_has_bash.rc == 0

@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-8f7906e3",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-23T00:17:05.990257+00:00",
+  "updated_ts": "2026-11-23T00:17:05.990257+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1795392593-e5785573",
+      "ACT-REV-1795392589-9b1539d7"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795391675-fish-conda-homebrew-hooks/P-1795391695-ANA-G4A/E-1795391884-ANA-G4A/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 evaluation for I-1795391675-fish-conda-homebrew-hooks/P-1795391695-ANA-G4A/E-1795391884-ANA-G4A/_",
+    "symptoms": [
+      "Findings detected: ['FIND-CI-001']"
+    ]
+  }
+}
