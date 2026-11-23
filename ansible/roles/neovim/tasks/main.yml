@@ -30,6 +30,7 @@
     cmd: nvim --version
   register: devenv_nvim_version
   changed_when: false
+  failed_when: not ansible_check_mode and devenv_nvim_version.rc != 0
   check_mode: false
 
 - name: Assert Neovim is new enough for vim.pack and nvim-pack-lock.json
@@ -42,7 +43,9 @@
       uses vim.pack() + nvim-pack-lock.json (0.12+). Ensure Neovim >= 0.12 is installed via Homebrew
       (devenv_neovim_source: brew).
     quiet: true
-  when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'
+  when:
+    - devenv_nvim_version.rc == 0
+    - devenv_active_nvim_variant | default('kickstart') == 'kickstart'
 
 - name: Sync plugins declared in init.lua at their locked revisions
   ansible.builtin.command:
@@ -58,6 +61,7 @@
       nvim --headless -c 'lua local n=#vim.pack.get() io.write("packages=" .. n)' -c 'qa'
   register: devenv_nvim_pkgs
   changed_when: false
+  failed_when: not ansible_check_mode and devenv_nvim_pkgs.rc != 0
   check_mode: false
   tags: [nvim-sync]
   when: devenv_active_nvim_variant | default('kickstart') == 'kickstart'

@@ -38,7 +38,7 @@
     - name: Assert GNU Stow is available
       ansible.builtin.assert:
         that:
-          - devenv_stow_bin.rc == 0
+          - devenv_stow_bin.rc == 0 or ansible_check_mode
         fail_msg: >-
           GNU Stow was not found on PATH. stow is required for unlinking managed dotfiles.
           Please install stow first.
@@ -83,6 +83,7 @@
           -d "{{ devenv_repo_root }}/dotfiles"
           -t "{{ devenv_home }}"
           {{ devenv_all_stow_packages | join(' ') }}
+      when: devenv_stow_bin.rc == 0
       register: devenv_stow_unlink
       changed_when: "'UNLINK:' in devenv_stow_unlink.stderr"
       failed_when: false

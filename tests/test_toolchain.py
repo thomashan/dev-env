@@ -360,3 +360,13 @@ def test_ansible_static_task_hygiene() -> None:
                     assert task_def.get("check_mode") is False, (
                         f"{source_name} ({task_name}) stow task with ansible_check_mode must declare check_mode: false"
                     )
+                    when_cond = task_def.get("when", [])
+                    when_list = [when_cond] if isinstance(when_cond, str) else list(when_cond)
+                    assert "devenv_stow_bin.rc == 0" in when_list, (
+                        f"{source_name} ({task_name}) stow task must guard on devenv_stow_bin.rc == 0"
+                    )
+            if task_name == "Assert GNU Stow is available":
+                that_conds = task_def.get("ansible.builtin.assert", {}).get("that", [])
+                assert "devenv_stow_bin.rc == 0 or ansible_check_mode" in that_conds, (
+                    f"{source_name} ({task_name}) must allow ansible_check_mode when stow is absent"
+                )
