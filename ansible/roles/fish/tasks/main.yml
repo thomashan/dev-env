@@ -19,12 +19,14 @@
   loop_control:
     label: "{{ item.path | basename }}"
   changed_when: false
+  check_mode: false
 
 - name: Report the fish version in use
   ansible.builtin.command:
     cmd: fish --version
   register: devenv_fish_version
   changed_when: false
+  check_mode: false
 
 - name: Show fish version
   ansible.builtin.debug:

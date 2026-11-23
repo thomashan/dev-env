@@ -33,6 +33,7 @@
       register: devenv_stow_bin
       changed_when: false
       failed_when: false
+      check_mode: false
 
     - name: Assert GNU Stow is available
       ansible.builtin.assert:
@@ -78,12 +79,14 @@
       ansible.builtin.command:
         cmd: >-
           stow --delete -v
+          {{ '-n' if ansible_check_mode else '' }}
           -d "{{ devenv_repo_root }}/dotfiles"
           -t "{{ devenv_home }}"
           {{ devenv_all_stow_packages | join(' ') }}
       register: devenv_stow_unlink
       changed_when: "'UNLINK:' in devenv_stow_unlink.stderr"
       failed_when: false
+      check_mode: false
 
     - name: Inspect legacy tmux XDG symlink
       ansible.builtin.stat:

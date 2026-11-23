@@ -242,6 +242,7 @@ check-mode:
 
 check-syntax:
 	@$(ANSIBLE_ENV) "$(PB)" "$(SITE)" --syntax-check $(ANSIBLE_EXTRA)
+	@$(ANSIBLE_ENV) "$(PB)" "$(SELF_DIR)/ansible/playbooks/unlink.yml" --syntax-check $(ANSIBLE_EXTRA)
 
 dotfiles:
 	@command -v stow >/dev/null 2>&1 || { echo "GNU Stow is required for dotfiles management. Run 'make converge' or install stow."; exit 1; }
