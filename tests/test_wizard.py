@@ -21,6 +21,7 @@ from scripts.devenv_wizard import (
     extract_local_override,
     format_diff,
     get_available_variants,
+    is_wsl,
     load_yaml_fallback,
     main,
     resolve_stow_packages,
@@ -292,12 +293,13 @@ def test_run_wizard_non_interactive(tmp_path):
     (dotfiles / "bash").mkdir(parents=True)
     (dotfiles / "nvim-kickstart").mkdir(parents=True)
 
-    choices = run_wizard(
-        repo_root=repo_root,
-        home_dir=home_dir,
-        choices_file=choices_file,
-        interactive=False,
-    )
+    with patch("scripts.devenv_wizard.is_wsl", return_value=False):
+        choices = run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=choices_file,
+            interactive=False,
+        )
 
     assert choices_file.exists()
     assert (choices_file.stat().st_mode & 0o777) == 0o644
@@ -350,15 +352,17 @@ def test_run_wizard_interactive_python_prompt(tmp_path):
 
 def test_main_cli_entrypoint(tmp_path):
     choices_file = tmp_path / "choices.yml"
-    rc = main([
-        "--non-interactive",
-        "--choices-file",
-        str(choices_file),
-        "--home",
-        str(tmp_path / "home"),
-        "--repo-root",
-        str(tmp_path / "repo"),
-    ])
+    rc = main(
+        [
+            "--non-interactive",
+            "--choices-file",
+            str(choices_file),
+            "--home",
+            str(tmp_path / "home"),
+            "--repo-root",
+            str(tmp_path / "repo"),
+        ]
+    )
     assert rc == 0
     assert choices_file.exists()
 
@@ -445,7 +449,10 @@ def test_wizard_gui_apps_prompts_brew_and_apt(tmp_path, monkeypatch):
         apt_prompts.append(prompt_str)
         return default or ""
 
-    with patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt_apt):
+    with (
+        patch("scripts.devenv_wizard.is_wsl", return_value=False),
+        patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt_apt),
+    ):
         run_wizard(
             repo_root=repo_root,
             home_dir=home_dir,
@@ -458,3 +465,84 @@ def test_wizard_gui_apps_prompts_brew_and_apt(tmp_path, monkeypatch):
     assert "ghostty" in gui_apt_prompt
     assert "warp" in gui_apt_prompt
 
+
+def test_is_wsl_detection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """is_wsl() detects WSL on Linux via env vars, kernel release, or /proc/version, and is False on Darwin."""
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    monkeypatch.delenv("WSL_INTEROP", raising=False)
+
+    # Darwin is never WSL even if WSL_DISTRO_NAME is set
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr("platform.release", lambda: "23.5.0")
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+    assert is_wsl() is False
+
+    # Linux with WSL_DISTRO_NAME
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.release", lambda: "6.8.0-45-generic")
+    assert is_wsl() is True
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+
+    # Linux with WSL_INTEROP
+    monkeypatch.setenv("WSL_INTEROP", "/run/WSL/1_interop")
+    assert is_wsl() is True
+    monkeypatch.delenv("WSL_INTEROP", raising=False)
+
+    # Linux with microsoft/WSL2 kernel release
+    monkeypatch.setattr("platform.release", lambda: "5.15.153.1-microsoft-standard-WSL2")
+    assert is_wsl() is True
+
+    # Linux with generic release but /proc/version indicating Microsoft WSL2
+    monkeypatch.setattr("platform.release", lambda: "6.8.0-45-generic")
+    proc_wsl = tmp_path / "proc_version_wsl"
+    proc_wsl.write_text("Linux version 5.15.153.1-microsoft-standard-WSL2 (root@build)\n", encoding="utf-8")
+    with patch("scripts.devenv_wizard.Path", side_effect=lambda p: proc_wsl if p == "/proc/version" else Path(p)):
+        assert is_wsl() is True
+
+    # Bare-metal Linux with generic release and non-WSL /proc/version
+    proc_linux = tmp_path / "proc_version_linux"
+    proc_linux.write_text("Linux version 6.8.0-45-generic (buildd@lcy02-amd64-044)\n", encoding="utf-8")
+    with patch("scripts.devenv_wizard.Path", side_effect=lambda p: proc_linux if p == "/proc/version" else Path(p)):
+        assert is_wsl() is False
+
+
+def test_wizard_skips_gui_apps_prompt_on_wsl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Interactive wizard on WSL skips the GUI terminal apps prompt and persists devenv_install_gui_casks: false."""
+    repo_root = tmp_path / "repo"
+    home_dir = tmp_path / "home"
+    choices_file = home_dir / ".config" / "dev-env" / "choices.yml"
+
+    dotfiles = repo_root / "dotfiles"
+    (dotfiles / "bash").mkdir(parents=True)
+    (dotfiles / "nvim-kickstart").mkdir(parents=True)
+
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+
+    prompts_called: list[str] = []
+
+    def mock_prompt_wsl(prompt_str: str, default: str | None = None, interactive: bool = True) -> str:
+        prompts_called.append(prompt_str)
+        return default or ""
+
+    with (
+        patch("scripts.devenv_wizard.is_wsl", return_value=True),
+        patch("scripts.devenv_wizard.prompt_user", side_effect=mock_prompt_wsl),
+    ):
+        choices = run_wizard(
+            repo_root=repo_root,
+            home_dir=home_dir,
+            choices_file=choices_file,
+            interactive=True,
+        )
+
+    assert prompts_called, "Wizard should still ask non-GUI interactive prompts on WSL"
+    for prompt in prompts_called:
+        assert "Install GUI terminal apps" not in prompt
+        assert "Install GUI casks" not in prompt
+        assert "ghostty" not in prompt.lower()
+        assert "warp" not in prompt.lower()
+
+    assert choices["devenv_install_gui_casks"] is False
+    saved_choices = load_yaml_fallback(choices_file.read_text(encoding="utf-8"))
+    assert saved_choices["devenv_install_gui_casks"] is False
