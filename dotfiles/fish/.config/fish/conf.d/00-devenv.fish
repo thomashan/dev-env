@@ -53,27 +53,28 @@ set -g nvm_data $XDG_DATA_HOME/nvm/versions/node
 set -gx nvm_mirror https://nodejs.org/dist
 set -g  nvm_default_version $devenv_node_default_version
 
-# Ensure unified version directory exists and maintain symlink parity with legacy paths
+# Ensure unified version directory exists and migrate legacy flat directories one-way
 if test -d "$XDG_DATA_HOME/nvm"
-    test -d "$XDG_DATA_HOME/nvm/versions/node" || mkdir -p "$XDG_DATA_HOME/nvm/versions/node"
-    # Legacy ~/.local/share/nvm/v* -> unified ~/.local/share/nvm/versions/node/v*
-    for legacy_ver in (command find "$XDG_DATA_HOME/nvm" -maxdepth 1 -name "v*" 2>/dev/null)
-        if test -d "$legacy_ver"
-            set -l vname (basename "$legacy_ver")
-            if not test -e "$XDG_DATA_HOME/nvm/versions/node/$vname"
-                test -L "$XDG_DATA_HOME/nvm/versions/node/$vname"; and command rm -f "$XDG_DATA_HOME/nvm/versions/node/$vname"
-                ln -sfn "$legacy_ver" "$XDG_DATA_HOME/nvm/versions/node/$vname"
+    test -d "$nvm_data" || command mkdir -p "$nvm_data"
+    if test -L "$nvm_data/versions"
+        command rm -f "$nvm_data/versions"
+    end
+    for legacy_ver in (command find "$XDG_DATA_HOME/nvm" -maxdepth 1 -name "v[0-9]*" 2>/dev/null)
+        set -l vname (basename "$legacy_ver")
+        if test -L "$legacy_ver"
+            command rm -f "$legacy_ver"
+        else if test -d "$legacy_ver"
+            if test -L "$nvm_data/$vname"
+                command rm -f "$nvm_data/$vname"
+                command mv "$legacy_ver" "$nvm_data/$vname"
+            else if not test -e "$nvm_data/$vname"
+                command mv "$legacy_ver" "$nvm_data/$vname"
             end
         end
     end
-    # Unified ~/.local/share/nvm/versions/node/v* -> legacy ~/.local/share/nvm/v* fallback
-    for node_ver in (command find "$XDG_DATA_HOME/nvm/versions/node" -maxdepth 1 -name "v*" 2>/dev/null)
-        if test -d "$node_ver"
-            set -l vname (basename "$node_ver")
-            if not test -e "$XDG_DATA_HOME/nvm/$vname"
-                test -L "$XDG_DATA_HOME/nvm/$vname"; and command rm -f "$XDG_DATA_HOME/nvm/$vname"
-                ln -sfn "$node_ver" "$XDG_DATA_HOME/nvm/$vname"
-            end
+    if test -L "$XDG_DATA_HOME/nvm/current"; and not test -e "$XDG_DATA_HOME/nvm/current"
+        if test -d "$nvm_data/v$devenv_node_default_version"
+            ln -sfn "$nvm_data/v$devenv_node_default_version" "$XDG_DATA_HOME/nvm/current"
         end
     end
 end

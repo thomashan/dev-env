@@ -340,3 +340,52 @@ def test_ansible_static_task_hygiene() -> None:
                     assert "not ansible_check_mode or devenv_stow_bin.rc == 0" in when_str, (
                         f"{label} must guard stow dry-run execution when stow is absent in check mode"
                     )
+
+
+def test_zsh_core_package_and_os_mapping(os_vars, group_vars, alias_tables) -> None:
+    """Zsh must be declared in devenv_packages_core, aliased in apt, and skipped on Darwin."""
+    assert "zsh" in group_vars.get("devenv_packages_core", []), "zsh missing from devenv_packages_core"
+    assert alias_tables["apt"].get("zsh") == "zsh", "zsh missing or misaliased in pkg_apt.yml"
+    assert "zsh" in os_vars["Darwin"].get("devenv_pkg_skip", []), "zsh must be skipped on Darwin (OS-provided)"
+    assert "zsh" not in os_vars["Linux"].get("devenv_pkg_skip", []), "zsh must not be skipped on Linux"
+
+
+def test_node_role_unified_nvm_versions_node_paths() -> None:
+    """Node role must ensure versions/node directory and point creates and current symlink at versions/node."""
+    node_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml"))
+
+    versions_dir_task = next(
+        (
+            t
+            for t in node_tasks
+            if t.get("ansible.builtin.file", {}).get("path") == "{{ devenv_home }}/.local/share/nvm/versions/node"
+        ),
+        None,
+    )
+    assert versions_dir_task is not None, "Missing task ensuring ~/.local/share/nvm/versions/node directory"
+    assert versions_dir_task["ansible.builtin.file"].get("state") == "directory"
+    assert versions_dir_task["ansible.builtin.file"].get("mode") == "0755"
+
+    install_task = next(
+        (t for t in node_tasks if t.get("name") == "Install the pinned node through nvm"),
+        None,
+    )
+    assert install_task is not None, "Missing 'Install the pinned node through nvm' task"
+    assert (
+        install_task.get("ansible.builtin.command", {}).get("creates")
+        == "{{ devenv_home }}/.local/share/nvm/versions/node/v{{ devenv_node_version }}/bin/node"
+    )
+
+    current_task = next(
+        (
+            t
+            for t in node_tasks
+            if t.get("name") == "Point `current` at the pinned version (PATH entry for non-interactive shells)"
+        ),
+        None,
+    )
+    assert current_task is not None, "Missing task pointing current at the pinned version"
+    current_file = current_task.get("ansible.builtin.file", {})
+    assert current_file.get("src") == "{{ devenv_home }}/.local/share/nvm/versions/node/v{{ devenv_node_version }}"
+    assert current_file.get("dest") == "{{ devenv_home }}/.local/share/nvm/current"
+    assert current_file.get("state") == "link"
