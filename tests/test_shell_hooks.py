@@ -85,6 +85,11 @@ def _link_repo_dotfiles(fake_home: Path) -> None:
             dest.unlink()
         dest.symlink_to(src)
 
+    # Ensure non-interactive login zsh (`zsh -lc`) also evaluates `.zshrc` in the
+    # hermetic test home without tracking an extra dotfile outside devenv_links.
+    zprofile = fake_home / ".zprofile"
+    zprofile.write_text('[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"\n', encoding="utf-8")
+
 
 def _build_hermetic_conda_and_nvm_home(tmp_path: Path) -> tuple[Path, Path]:
     """Create a hermetic fake HOME with fake miniforge3, NVM node, and Homebrew conda symlink."""
