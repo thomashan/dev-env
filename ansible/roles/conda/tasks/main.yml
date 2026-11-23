@@ -261,7 +261,8 @@
       env -i HOME="{{ devenv_home }}" USER="{{ devenv_user }}"
       PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_fish.stdout | trim) | dirname }}"
       "{{ devenv_conda_has_fish.stdout | trim }}" -lc
-      'type -t conda; echo "ENV=$CONDA_DEFAULT_ENV"; string join : $PATH'
+      'type -t conda; echo "ENV=$CONDA_DEFAULT_ENV"; string join : -- $PATH'
+    expand_argument_vars: false
   register: devenv_conda_verify_fish
   when:
     - not ansible_check_mode
@@ -298,6 +299,7 @@
       PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_zsh.stdout | trim) | dirname }}"
       "{{ devenv_conda_has_zsh.stdout | trim }}" -lic
       'type conda; echo "ENV=${CONDA_DEFAULT_ENV:-}"; echo "PATH=$PATH"'
+    expand_argument_vars: false
   register: devenv_conda_verify_zsh
   when:
     - not ansible_check_mode
@@ -334,6 +336,7 @@
       PATH="/usr/bin:/bin:/usr/sbin:/sbin:{{ (devenv_conda_has_bash.stdout | trim) | dirname }}"
       "{{ devenv_conda_has_bash.stdout | trim }}" -lic
       'type -t conda; echo "ENV=${CONDA_DEFAULT_ENV:-}"; echo "PATH=$PATH"'
+    expand_argument_vars: false
   register: devenv_conda_verify_bash
   when:
     - not ansible_check_mode

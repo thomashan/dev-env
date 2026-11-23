@@ -322,6 +322,12 @@ def test_ansible_static_task_hygiene() -> None:
                 assert isinstance(cmd_block, dict), f"{label} must use structured ansible.builtin.command mapping"
                 cmd_str = cmd_block.get("cmd")
                 assert isinstance(cmd_str, str) and cmd_str.strip(), f"{label} missing non-empty cmd string"
+                cmd_no_jinja = re.sub(r"\{\{.*?\}\}", "", cmd_str, flags=re.DOTALL)
+                if re.search(r"\$[A-Za-z_{]", cmd_no_jinja):
+                    assert cmd_block.get("expand_argument_vars") is False, (
+                        f"{label} references shell $VAR tokens in ansible.builtin.command.cmd and must set "
+                        "expand_argument_vars: false so Ansible does not expand them from the parent environment"
+                    )
                 has_changed_when = "changed_when" in task_def
                 has_creates = "creates" in cmd_block
                 assert has_changed_when or has_creates, f"{label} must declare changed_when or creates"

@@ -21,6 +21,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -238,12 +239,8 @@ def test_three_shell_static_parity() -> None:
 
         assert last_nvm_idx > brew_idx, f"{shell_name} must re-assert NVM PATH after brew shellenv"
         assert last_nvm_idx > conda_hook_idx, f"{shell_name} must re-assert NVM PATH after {hook_token}"
-        assert last_nvm_idx > micromamba_hook_idx, (
-            f"{shell_name} must re-assert NVM PATH after micromamba shell hook"
-        )
-        assert last_local_bin_idx > conda_hook_idx, (
-            f"{shell_name} must re-assert ~/.local/bin PATH after {hook_token}"
-        )
+        assert last_nvm_idx > micromamba_hook_idx, f"{shell_name} must re-assert NVM PATH after micromamba shell hook"
+        assert last_local_bin_idx > conda_hook_idx, f"{shell_name} must re-assert ~/.local/bin PATH after {hook_token}"
 
 
 def test_conda_role_clean_env_shell_verification_tasks() -> None:
@@ -267,8 +264,14 @@ def test_conda_role_clean_env_shell_verification_tasks() -> None:
         assert verify_task is not None, f"Missing clean-env verification task ({verify_var}) for {shell_name}"
         assert verify_task.get("changed_when") is False
         assert verify_task.get("check_mode") is False
-        cmd = verify_task.get("ansible.builtin.command", {}).get("cmd", "")
+        cmd_block = verify_task.get("ansible.builtin.command", {})
+        assert cmd_block.get("expand_argument_vars") is False, (
+            f"{verify_var} must declare expand_argument_vars: false under ansible.builtin.command"
+        )
+        cmd = cmd_block.get("cmd", "")
         assert "env -i" in cmd, f"{verify_var} must run under env -i"
+        if shell_name == "fish":
+            assert "string join : -- $PATH" in cmd, "Fish verification task must use 'string join : -- $PATH'"
         when_clauses = verify_task.get("when", [])
         if isinstance(when_clauses, str):
             when_clauses = [when_clauses]
@@ -289,6 +292,92 @@ def test_conda_role_clean_env_shell_verification_tasks() -> None:
         assert "function" in that_conds
         assert "ENV=base" in that_conds
         assert "devenv_conda_dir ~ '/bin'" in that_conds
+
+
+def test_ansible_conda_clean_env_shell_verification_playbook(tmp_path: Path) -> None:
+    """Execute actual Conda clean-shell verification tasks through real ansible-playbook with polluted parent env."""
+    venv_bin = Path(sys.executable).parent / "ansible-playbook"
+    if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
+        ansible_playbook_bin: str | None = str(venv_bin)
+    else:
+        ansible_playbook_bin = shutil.which("ansible-playbook")
+
+    if ansible_playbook_bin is None:
+        if os.environ.get("CI") == "true" and os.environ.get("HOLON_IN_SANDBOX") != "1":
+            pytest.fail("Required binary 'ansible-playbook' is missing in CI")
+        pytest.skip("ansible-playbook not installed in local/sandbox environment")
+
+    fake_home, _ = _build_hermetic_conda_and_nvm_home(tmp_path)
+    conda_root = fake_home / "miniforge3"
+
+    conda_tasks: list[dict[str, Any]] = yaml.safe_load(
+        read(REPO_ROOT / "ansible" / "roles" / "conda" / "tasks" / "main.yml")
+    )
+    start_idx = next(
+        (
+            idx
+            for idx, task in enumerate(conda_tasks)
+            if task.get("name") == "Check if fish is available for Conda clean-shell verification"
+        ),
+        None,
+    )
+    assert start_idx is not None, "Missing 'Check if fish is available for Conda clean-shell verification' task"
+    clean_shell_tasks = conda_tasks[start_idx:]
+
+    playbook_path = tmp_path / "verify_conda_clean_shells.yml"
+    playbook_content = [
+        {
+            "name": "Verify Conda clean-shell tasks via ansible-playbook",
+            "hosts": "localhost",
+            "connection": "local",
+            "gather_facts": True,
+            "vars_files": [str(REPO_ROOT / "ansible" / "group_vars" / "all.yml")],
+            "tasks": clean_shell_tasks,
+        }
+    ]
+    playbook_path.write_text(yaml.safe_dump(playbook_content, sort_keys=False), encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = f"/fake/polluted/makefile/path:{os.environ.get('PATH', '')}"
+    env["CONDA_DEFAULT_ENV"] = "POLLUTED_PARENT_ENV"
+    env["ANSIBLE_LOCAL_TEMP"] = str(tmp_path / ".ansible_tmp")
+    env["ANSIBLE_REMOTE_TEMP"] = str(tmp_path / ".ansible_remote_tmp")
+
+    proc = subprocess.run(
+        [
+            ansible_playbook_bin,
+            "-i",
+            "localhost,",
+            "-c",
+            "local",
+            "-e",
+            f"devenv_home={fake_home}",
+            "-e",
+            f"devenv_conda_dir={conda_root}",
+            str(playbook_path),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, (
+        f"ansible-playbook exited {proc.returncode}.\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert "[DEPRECATION WARNING]" not in proc.stderr, f"Deprecation warning in stderr:\n{proc.stderr}"
+    assert "Assert Conda function, default env, and PATH in Bash" in proc.stdout
+
+    is_ci = os.environ.get("CI") == "true" and os.environ.get("HOLON_IN_SANDBOX") != "1"
+    for shell_name, assert_header in [
+        ("fish", "Assert Conda function, default env, and PATH in Fish"),
+        ("zsh", "Assert Conda function, default env, and PATH in Zsh"),
+    ]:
+        if is_ci:
+            _require_shell(shell_name)
+        if shutil.which(shell_name) is not None or is_ci:
+            assert assert_header in proc.stdout, f"Missing task header '{assert_header}' in stdout:\n{proc.stdout}"
+            section = proc.stdout.split(assert_header, 1)[1].split("TASK [", 1)[0]
+            assert "skipping:" not in section, f"Expected '{assert_header}' to execute without skipping:\n{section}"
 
 
 def test_ci_unit_workflow_installs_fish_and_zsh() -> None:
