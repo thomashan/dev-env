@@ -51,7 +51,7 @@ def dump_yaml_fallback(data: dict[str, Any]) -> str:
         elif isinstance(v, (int, float)):
             res.append(f"{v}")
         elif isinstance(v, str):
-            res.append(f"\"{v}\"" if (":" in v or " " in v or not v) else v)
+            res.append(f'"{v}"' if (":" in v or " " in v or not v) else v)
         elif isinstance(v, list):
             if not v:
                 res.append("[]")
@@ -68,7 +68,9 @@ def dump_yaml_fallback(data: dict[str, Any]) -> str:
                 for k, sub_v in v.items():
                     val_lines = _dump_val(sub_v, indent + 2)
                     if isinstance(sub_v, (dict, list)) and sub_v:
-                        res.append(f"\n{pad}{k}:{val_lines[0] if val_lines[0].startswith('\n') else ' ' + val_lines[0]}")
+                        res.append(
+                            f"\n{pad}{k}:{val_lines[0] if val_lines[0].startswith('\n') else ' ' + val_lines[0]}"
+                        )
                         for sub in val_lines[1:]:
                             res.append(f"{sub}")
                     else:
@@ -141,6 +143,26 @@ def load_yaml_fallback(text: str) -> dict[str, Any]:
     return result
 
 
+def is_wsl() -> bool:
+    """Detect whether the current Linux host is running inside WSL."""
+    if platform.system() != "Linux":
+        return False
+    if os.environ.get("WSL_DISTRO_NAME", "").strip() or os.environ.get("WSL_INTEROP", "").strip():
+        return True
+    release = platform.release().lower()
+    if "microsoft" in release or "wsl" in release:
+        return True
+    proc_version = Path("/proc/version")
+    try:
+        if proc_version.exists():
+            version_text = proc_version.read_text(encoding="utf-8", errors="replace").lower()
+            if "microsoft" in version_text or "wsl" in version_text:
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def detect_platform() -> dict[str, str]:
     """Detect operating system, architecture, and package manager backend."""
     sys_name = platform.system()
@@ -158,10 +180,10 @@ def detect_platform() -> dict[str, str]:
             try:
                 for line in os_release.read_text(encoding="utf-8").splitlines():
                     if line.startswith("PRETTY_NAME="):
-                        distro = line.split("=", 1)[1].strip('"\'')
+                        distro = line.split("=", 1)[1].strip("\"'")
                         break
                     if line.startswith("NAME=") and not distro:
-                        distro = line.split("=", 1)[1].strip('"\'')
+                        distro = line.split("=", 1)[1].strip("\"'")
             except OSError:
                 pass
         if not distro:
@@ -241,12 +263,14 @@ def scan_dotfile_conflicts(
                 except OSError:
                     pass
 
-            conflicts.append({
-                "package": pkg_name,
-                "rel_path": str(rel_path),
-                "src_path": src_path,
-                "dest_path": dest_path,
-            })
+            conflicts.append(
+                {
+                    "package": pkg_name,
+                    "rel_path": str(rel_path),
+                    "src_path": src_path,
+                    "dest_path": dest_path,
+                }
+            )
 
     return conflicts
 
@@ -402,10 +426,7 @@ def run_wizard(
 
     chosen_backend = existing_choices.get("devenv_pkg_backend", detected_backend)
     if interactive:
-        prompt_msg = (
-            f"Detected {plat_info['distro']} ({plat_info['machine']}). "
-            f"Package backend"
-        )
+        prompt_msg = f"Detected {plat_info['distro']} ({plat_info['machine']}). Package backend"
         ans = prompt_user(prompt_msg, default=chosen_backend, interactive=True)
         if ans.lower() in ("brew", "apt"):
             chosen_backend = ans.lower()
@@ -487,6 +508,9 @@ def run_wizard(
     # --- Step D: Host Feature Flags & Runtime Pins ---
     set_login_shell = bool(existing_choices.get("devenv_set_login_shell", True))
     install_gui_casks = bool(existing_choices.get("devenv_install_gui_casks", True))
+    wsl = is_wsl()
+    if wsl:
+        install_gui_casks = False
     remove_unmanaged = bool(existing_choices.get("devenv_remove_unmanaged", False))
     versions = load_versions()
     py_version = str(existing_choices.get("devenv_python_version", "3.13"))
@@ -511,7 +535,7 @@ def run_wizard(
                 interactive=True,
             )
             install_gui_casks = ans_casks.lower() in ("true", "1", "yes", "y")
-        elif chosen_backend == "apt":
+        elif chosen_backend == "apt" and not wsl:
             ans_casks = prompt_user(
                 "Install GUI terminal apps (ghostty, warp)? (true/false)",
                 default=str(install_gui_casks).lower(),

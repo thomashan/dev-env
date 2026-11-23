@@ -18,12 +18,15 @@ import sys
 import textwrap
 import urllib.request
 from pathlib import Path
+from typing import Any
 
+import jinja2
+import jinja2.nodes
 import pytest
 import yaml
 from ansible.errors import AnsibleUndefinedVariable
 
-from .conftest import REPO_ROOT, read
+from .conftest import REPO_ROOT, read, role_task_files
 
 pytestmark = pytest.mark.templating
 
@@ -730,3 +733,172 @@ def test_playbooks_syntax_check_zero_deprecation_warnings(tmp_path: Path, playbo
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "[DEPRECATION WARNING]" not in proc.stderr, proc.stderr
     assert "DEPRECATION WARNING" not in proc.stderr, proc.stderr
+
+
+def test_devenv_user_resolution(templar, group_vars: dict[str, Any]) -> None:
+    """devenv_user resolves from ansible_facts.user_id and falls back to ansible_facts.env.USER."""
+    assert "devenv_user" in group_vars
+    resolved_primary = templar(
+        group_vars["devenv_user"],
+        {"ansible_facts": {"user_id": "alice", "env": {"USER": "bob"}}},
+    )
+    assert resolved_primary == "alice"
+
+    resolved_fallback = templar(
+        group_vars["devenv_user"],
+        {"ansible_facts": {"env": {"USER": "fallback_user"}}},
+    )
+    assert resolved_fallback == "fallback_user"
+
+
+@pytest.mark.parametrize(
+    ("task_name", "register_var", "shell_bin"),
+    [
+        ("Verify Conda activation in a clean Fish login shell", "devenv_conda_has_fish", "/usr/bin/fish"),
+        ("Verify Conda activation in a clean Zsh login interactive shell", "devenv_conda_has_zsh", "/usr/bin/zsh"),
+        ("Verify Conda activation in a clean Bash login interactive shell", "devenv_conda_has_bash", "/bin/bash"),
+    ],
+)
+def test_conda_clean_env_shell_verification_cmd_templates(
+    templar,
+    task_name: str,
+    register_var: str,
+    shell_bin: str,
+) -> None:
+    """Conda clean-shell verification command templates render without undefined variable errors."""
+    task_def = task("conda", task_name)
+    cmd_template = task_def["ansible.builtin.command"]["cmd"]
+    variables = {
+        "ansible_facts": {
+            "env": {"HOME": "/home/wsluser", "USER": "wsluser"},
+            "user_id": "wsluser",
+        },
+        register_var: {"rc": 0, "stdout": f"{shell_bin}\n"},
+    }
+    first_pass = templar(cmd_template, variables)
+    rendered = templar(first_pass, variables)
+    assert 'HOME="/home/wsluser"' in rendered
+    assert 'USER="wsluser"' in rendered
+    assert f'"{shell_bin}"' in rendered
+
+
+def _extract_task_jinja_templates(task_def: dict[str, Any]) -> list[str]:
+    """Extract all Jinja2 template strings and bare conditional expressions from a task dictionary."""
+    templates: list[str] = []
+    bare_keys = {"when", "changed_when", "failed_when"}
+
+    def _collect_strings(obj: Any, is_bare_expr: bool = False) -> None:
+        if isinstance(obj, str):
+            stripped = obj.strip()
+            if not stripped:
+                return
+            if "{{" in stripped or "{%" in stripped:
+                templates.append(stripped)
+            elif is_bare_expr:
+                templates.append(f"{{{{ {stripped} }}}}")
+        elif isinstance(obj, list):
+            for elem in obj:
+                _collect_strings(elem, is_bare_expr=is_bare_expr)
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                _collect_strings(v, is_bare_expr=(is_bare_expr or k in bare_keys))
+
+    for key, val in task_def.items():
+        if key == "ansible.builtin.assert" and isinstance(val, dict):
+            _collect_strings(val.get("that", []), is_bare_expr=True)
+            for sub_k, sub_v in val.items():
+                if sub_k != "that":
+                    _collect_strings(sub_v, is_bare_expr=False)
+        else:
+            _collect_strings(val, is_bare_expr=(key in bare_keys))
+
+    return templates
+
+
+def test_all_role_and_playbook_jinja_variables_are_defined(
+    group_vars: dict[str, Any],
+    os_vars: dict[str, dict[str, Any]],
+    alias_tables: dict[str, dict[str, Any]],
+) -> None:
+    """Every Jinja2 variable referenced across role tasks and playbooks must be declared."""
+    jinja2_env = jinja2.Environment()
+    jinja_builtins = {
+        "true",
+        "false",
+        "none",
+        "True",
+        "False",
+        "None",
+        "loop",
+        "range",
+        "dict",
+        "lipsum",
+        "cycler",
+        "joiner",
+        "namespace",
+    }
+    runtime_vars = {
+        "ansible_facts",
+        "ansible_check_mode",
+        "ansible_playbook_python",
+        "playbook_dir",
+        "item",
+        "omit",
+        "lookup",
+        "devenv_selected_variants",
+        "devenv_skip_links",
+    }
+
+    declared_vars: set[str] = set(group_vars.keys()) | runtime_vars
+    for os_dict in os_vars.values():
+        declared_vars.update(os_dict.keys())
+    if alias_tables:
+        declared_vars.add("devenv_pkg_aliases")
+
+    playbook_files = [REPO_ROOT / "ansible" / "site.yml", *sorted((REPO_ROOT / "ansible" / "playbooks").glob("*.yml"))]
+    all_tasks: list[tuple[Path, dict[str, Any]]] = []
+
+    for task_file in role_task_files():
+        loaded = yaml.safe_load(read(task_file)) or []
+        for task_def in loaded:
+            if isinstance(task_def, dict):
+                all_tasks.append((task_file, task_def))
+
+    for pb_file in playbook_files:
+        loaded_plays = yaml.safe_load(read(pb_file)) or []
+        for play in loaded_plays:
+            if not isinstance(play, dict):
+                continue
+            play_vars = play.get("vars", {})
+            if isinstance(play_vars, dict):
+                declared_vars.update(play_vars.keys())
+            for task_def in play.get("tasks", []):
+                if isinstance(task_def, dict):
+                    all_tasks.append((pb_file, task_def))
+
+    for _, task_def in all_tasks:
+        reg = task_def.get("register")
+        if isinstance(reg, str) and reg:
+            declared_vars.add(reg)
+        set_fact_dict = task_def.get("ansible.builtin.set_fact")
+        if isinstance(set_fact_dict, dict):
+            for fact_key in set_fact_dict:
+                if fact_key != "cacheable":
+                    declared_vars.add(fact_key)
+
+    undefined_refs: list[str] = []
+    for source_path, task_def in all_tasks:
+        task_name = task_def.get("name", "<unnamed>")
+        rel_path = source_path.relative_to(REPO_ROOT)
+        for template_str in _extract_task_jinja_templates(task_def):
+            ast = jinja2_env.parse(template_str)
+            local_targets = {node.name for node in ast.find_all(jinja2.nodes.Name) if node.ctx in ("store", "param")}
+            referenced = {
+                node.name
+                for node in ast.find_all(jinja2.nodes.Name)
+                if node.ctx == "load" and node.name not in local_targets and node.name not in jinja_builtins
+            }
+            for var_name in sorted(referenced - declared_vars):
+                undefined_refs.append(f"{rel_path} :: {task_name} -> {var_name!r}")
+
+    assert not undefined_refs, "Undefined Jinja2 variables found:\n" + "\n".join(undefined_refs)
