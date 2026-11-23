@@ -497,6 +497,31 @@ def test_dotfiles_stow_ignore_options_name_skipped_files(templar):
     assert result == '--ignore="^\\.bashrc$" --ignore="^config\\.fish$"'
 
 
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [
+        ({"system": "Linux", "kernel": "5.15.167.4-microsoft-standard-WSL2", "env": {}}, True),
+        ({"system": "Linux", "kernel": "6.6.36.3-standard", "env": {"WSL_DISTRO_NAME": "Ubuntu"}}, True),
+        ({"system": "Linux", "kernel": "6.6.36.3-standard", "env": {"WSL_INTEROP": "/run/WSL/12_interop"}}, True),
+        ({"system": "Linux", "kernel": "6.8.0-45-generic", "env": {}}, False),
+        ({"system": "Darwin", "kernel": "24.1.0", "env": {"WSL_DISTRO_NAME": "Ubuntu"}}, False),
+    ],
+)
+def test_bootstrap_devenv_is_wsl_detection(templar, facts, expected):
+    """Bootstrap role detects WSL across kernel strings and WSL environment variables on Linux only."""
+    expr = set_fact_expression("bootstrap", "Classify host platform", "devenv_is_wsl")
+    assert templar(expr, {"ansible_facts": facts}) is expected
+
+
+def test_packages_linux_gui_wsl_guard_evaluation(templar):
+    """Linux GUI terminal tasks skip on WSL unless devenv_install_gui_on_wsl is true."""
+    probe = task("packages", "Probe Warp terminal binary")
+    wsl_cond = next(c for c in probe["when"] if "devenv_is_wsl" in c)
+    assert templar(wsl_cond, {"devenv_is_wsl": True, "devenv_install_gui_on_wsl": False}) is False
+    assert templar(wsl_cond, {"devenv_is_wsl": True, "devenv_install_gui_on_wsl": True}) is True
+    assert templar(wsl_cond, {"devenv_is_wsl": False, "devenv_install_gui_on_wsl": False}) is True
+
+
 # --- real ansible-playbook runs against an isolated $HOME -------------------
 
 # Records every fact set during the run so tests can inspect what the roles
@@ -652,3 +677,24 @@ def test_ansible_dotfiles_converge_with_stale_choices_and_stow(tmp_path, link_ma
     ghostty = home / ".config" / "ghostty" / "config.ghostty"
     assert ghostty.is_symlink()
     assert ghostty.resolve() == (REPO_ROOT / "dotfiles/ghostty/.config/ghostty/config.ghostty").resolve()
+
+
+@pytest.mark.parametrize("playbook_rel", ["ansible/site.yml", "ansible/playbooks/unlink.yml"])
+def test_playbooks_syntax_check_zero_deprecation_warnings(tmp_path, playbook_rel):
+    """ansible-playbook --syntax-check succeeds with zero deprecation warnings on site.yml and unlink.yml."""
+    playbook_bin = ansible_playbook_bin()
+    if playbook_bin is None:
+        pytest.skip("ansible-playbook not available in this environment")
+    env = {
+        **os.environ,
+        "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+        "ANSIBLE_COLLECTIONS_PATH": collections_path(tmp_path / "collections-syntax"),
+        "ANSIBLE_DEPRECATION_WARNINGS": "True",
+        "ANSIBLE_FORCE_COLOR": "0",
+        "ANSIBLE_NOCOLOR": "1",
+    }
+    cmd = [playbook_bin, str(REPO_ROOT / playbook_rel), "--syntax-check"]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=120, check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "[DEPRECATION WARNING]" not in proc.stderr, proc.stderr
+    assert "[DEPRECATION WARNING]" not in proc.stdout, proc.stdout

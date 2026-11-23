@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from .conftest import REPO_ROOT, read
+from .conftest import REPO_ROOT, read, role_task_files
 
 pytestmark = pytest.mark.manifest
 
@@ -59,13 +59,15 @@ def test_multishell_micromamba_parity() -> None:
 
 
 def test_makefile_check_syntax_target() -> None:
-    """Makefile defines check-syntax in .PHONY and executes --syntax-check."""
+    """Makefile defines check-syntax in .PHONY and executes --syntax-check on site.yml and unlink.yml."""
     makefile = read(REPO_ROOT / "Makefile")
     assert "check-syntax" in makefile.split(".PHONY:")[1].split("\n\n")[0]
     assert "check-syntax:" in makefile
     syntax_recipe = makefile.split("\ncheck-syntax:")[1].split("\n\n")[0]
     assert "--syntax-check" in syntax_recipe
     assert "$(ANSIBLE_ENV)" in syntax_recipe
+    assert '"$(SITE)"' in syntax_recipe
+    assert '"$(SELF_DIR)/ansible/playbooks/unlink.yml"' in syntax_recipe
 
 
 def test_makefile_bootstrap_ca_injection() -> None:
@@ -135,11 +137,12 @@ def test_multishell_node_extra_ca_certs_parity() -> None:
 
 
 def test_tmux_pane_current_path_keybindings() -> None:
-    """tmux configuration binds splits and new windows to current pane working directory."""
+    """tmux configuration binds splits and new windows to current pane working directory and enables mouse mode."""
     tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".tmux.conf")
     assert 'bind-key \'"\' split-window -v -c "#{pane_current_path}"' in tmux_conf
     assert 'bind-key % split-window -h -c "#{pane_current_path}"' in tmux_conf
     assert 'bind-key c new-window -c "#{pane_current_path}"' in tmux_conf
+    assert "set -g mouse on" in tmux_conf
 
 
 def test_gui_casks_and_linux_gui_apps_declarations(os_vars, group_vars) -> None:
@@ -179,9 +182,20 @@ def test_zsh_word_jump_keybindings() -> None:
     assert 'bindkey "^[[1;5C" forward-word' in zshrc
 
 
-def test_linux_packages_gui_terminal_tasks() -> None:
-    """Packages role defines check-mode safe, idempotent Linux tasks for Warp and Ghostty."""
+def test_linux_packages_gui_terminal_tasks(group_vars) -> None:
+    """Packages role defines check-mode safe, idempotent, WSL-gated Linux tasks for Warp and Ghostty."""
     import yaml
+
+    assert group_vars.get("devenv_install_gui_casks") is True
+    assert group_vars.get("devenv_install_gui_on_wsl") is False
+
+    bootstrap_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "bootstrap" / "tasks" / "main.yml"))
+    classify_task = next((t for t in bootstrap_tasks if t.get("name") == "Classify host platform"), None)
+    assert classify_task is not None
+    assert "devenv_is_wsl" in classify_task.get("ansible.builtin.set_fact", {})
+    show_plan_task = next((t for t in bootstrap_tasks if t.get("name") == "Show resolved plan"), None)
+    assert show_plan_task is not None
+    assert any("devenv_is_wsl" in line for line in show_plan_task.get("ansible.builtin.debug", {}).get("msg", []))
 
     packages_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "packages" / "tasks" / "main.yml"))
 
@@ -189,6 +203,7 @@ def test_linux_packages_gui_terminal_tasks() -> None:
     assert warp_probe is not None
     assert warp_probe.get("check_mode") is False
     assert warp_probe.get("failed_when") is False
+    assert warp_probe.get("ansible.builtin.command", {}).get("cmd") == "which warp-terminal"
 
     warp_keyring = next((t for t in packages_tasks if t.get("name") == "Ensure APT keyrings directory exists"), None)
     assert warp_keyring is not None
@@ -210,17 +225,110 @@ def test_linux_packages_gui_terminal_tasks() -> None:
     assert ghostty_probe is not None
     assert ghostty_probe.get("check_mode") is False
     assert ghostty_probe.get("failed_when") is False
+    assert ghostty_probe.get("ansible.builtin.command", {}).get("cmd") == "which ghostty"
 
     ghostty_apt_cache = next(
         (t for t in packages_tasks if t.get("name") == "Probe native Ghostty apt package availability"), None
     )
     assert ghostty_apt_cache is not None
     assert ghostty_apt_cache.get("check_mode") is False
+    assert ghostty_apt_cache.get("ansible.builtin.command", {}).get("cmd") == "apt-cache show ghostty"
+
+    snap_probe = next((t for t in packages_tasks if t.get("name") == "Probe snap command"), None)
+    assert snap_probe is not None
+    assert snap_probe.get("check_mode") is False
+    assert snap_probe.get("ansible.builtin.command", {}).get("cmd") == "which snap"
 
     ghostty_snap = next((t for t in packages_tasks if t.get("name") == "Install Ghostty via snap"), None)
     assert ghostty_snap is not None
-    assert "snap install ghostty --classic" in ghostty_snap.get("ansible.builtin.command", "")
+    assert "snap install ghostty --classic" in ghostty_snap.get("ansible.builtin.command", {}).get("cmd", "")
 
     ghostty_ppa = next((t for t in packages_tasks if t.get("name") == "Add Ghostty PPA on Ubuntu"), None)
     assert ghostty_ppa is not None
-    assert ghostty_ppa.get("ansible.builtin.apt_repository", {}).get("repo") == "ppa:mkasberg/ghostty-ubuntu"
+    deb822 = ghostty_ppa.get("ansible.builtin.deb822_repository", {})
+    assert deb822.get("name") == "ghostty-ubuntu"
+    assert deb822.get("types") == ["deb"]
+    assert deb822.get("uris") == ["https://ppa.launchpadcontent.net/mkasberg/ghostty-ubuntu/ubuntu"]
+    assert deb822.get("suites") == ["{{ ansible_facts['distribution_release'] }}"]
+    assert deb822.get("components") == ["main"]
+    assert (
+        deb822.get("signed_by")
+        == "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x7981725F2B0C9E295E2C368B322003C4710E280B"
+    )
+    assert deb822.get("state") == "present"
+
+    linux_gui_task_names = [
+        "Probe Warp terminal binary",
+        "Ensure APT keyrings directory exists",
+        "Fetch and dearmor Warp GPG signing key",
+        "Configure Warp APT repository",
+        "Install Warp terminal via apt",
+        "Probe Ghostty binary",
+        "Probe native Ghostty apt package availability",
+        "Install Ghostty via native apt",
+        "Probe snap command",
+        "Install Ghostty via snap",
+        "Add Ghostty PPA on Ubuntu",
+        "Install Ghostty from PPA on Ubuntu",
+    ]
+    for task_name in linux_gui_task_names:
+        gui_task = next((t for t in packages_tasks if t.get("name") == task_name), None)
+        assert gui_task is not None, f"Missing task: {task_name}"
+        when_clauses = gui_task.get("when", [])
+        assert isinstance(when_clauses, list), f"{task_name}: when must be a list"
+        assert any(
+            "devenv_is_wsl" in str(clause) and "devenv_install_gui_on_wsl" in str(clause) for clause in when_clauses
+        ), f"{task_name}: missing WSL guard in when clauses"
+
+
+def test_ansible_task_hygiene_and_check_mode_probes() -> None:
+    """Every role task file and unlink.yml satisfies module deprecation, command, and check_mode invariants."""
+    import yaml
+
+    files_with_tasks: list[tuple[str, list[dict]]] = []
+    for path in role_task_files():
+        rel = str(path.relative_to(REPO_ROOT))
+        files_with_tasks.append((rel, yaml.safe_load(read(path)) or []))
+
+    unlink_path = REPO_ROOT / "ansible" / "playbooks" / "unlink.yml"
+    unlink_plays = yaml.safe_load(read(unlink_path)) or []
+    for play in unlink_plays:
+        files_with_tasks.append(("ansible/playbooks/unlink.yml", play.get("tasks", [])))
+
+    forbidden_modules = {
+        "ansible.builtin.apt_repository",
+        "ansible.builtin.apt_key",
+        "apt_repository",
+        "apt_key",
+    }
+
+    for rel_path, tasks in files_with_tasks:
+        for task_def in tasks:
+            task_name = task_def.get("name", "<unnamed>")
+            used_forbidden = forbidden_modules & set(task_def.keys())
+            assert not used_forbidden, f"{rel_path} ({task_name}) uses deprecated module(s): {used_forbidden}"
+
+            if "ansible.builtin.command" in task_def:
+                cmd_spec = task_def["ansible.builtin.command"]
+                assert isinstance(cmd_spec, dict), (
+                    f"{rel_path} ({task_name}): ansible.builtin.command must be a mapping with cmd:"
+                )
+                cmd_str = cmd_spec.get("cmd")
+                assert isinstance(cmd_str, str) and cmd_str.strip(), (
+                    f"{rel_path} ({task_name}): ansible.builtin.command.cmd must be a non-empty string"
+                )
+                has_changed_when = "changed_when" in task_def
+                has_creates = "creates" in cmd_spec
+                assert has_changed_when or has_creates, (
+                    f"{rel_path} ({task_name}): ansible.builtin.command must declare changed_when or creates"
+                )
+
+                if task_def.get("changed_when") is False:
+                    assert task_def.get("check_mode") is False, (
+                        f"{rel_path} ({task_name}): read-only probe (changed_when: false) must set check_mode: false"
+                    )
+
+                if "ansible_check_mode" in cmd_str:
+                    assert task_def.get("check_mode") is False, (
+                        f"{rel_path} ({task_name}): task referencing ansible_check_mode must set check_mode: false"
+                    )

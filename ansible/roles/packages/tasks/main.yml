@@ -27,6 +27,7 @@
          if devenv_pkg_backend == 'brew'
          else 'apt remove -y ' + (devenv_packages_remove | map('extract', devenv_pkg_aliases) | join(' ')) }}
   become: "{{ devenv_become_package_install | bool }}"
+  changed_when: true
   when:
     - devenv_remove_unmanaged | bool
     - devenv_packages_remove | length > 0
@@ -62,7 +63,8 @@
     - devenv_brew_bin | length > 0
 
 - name: Probe Warp terminal binary
-  ansible.builtin.command: which warp-terminal
+  ansible.builtin.command:
+    cmd: which warp-terminal
   register: warp_terminal_which
   check_mode: false
   failed_when: false
@@ -70,6 +72,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
 
 - name: Ensure APT keyrings directory exists
   ansible.builtin.file:
@@ -80,6 +83,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - warp_terminal_which.rc != 0
 
 - name: Fetch and dearmor Warp GPG signing key
@@ -91,6 +95,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - warp_terminal_which.rc != 0
 
 - name: Configure Warp APT repository
@@ -102,6 +107,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - warp_terminal_which.rc != 0
 
 - name: Install Warp terminal via apt
@@ -113,10 +119,12 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - warp_terminal_which.rc != 0
 
 - name: Probe Ghostty binary
-  ansible.builtin.command: which ghostty
+  ansible.builtin.command:
+    cmd: which ghostty
   register: ghostty_which
   check_mode: false
   failed_when: false
@@ -124,9 +132,11 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
 
 - name: Probe native Ghostty apt package availability
-  ansible.builtin.command: apt-cache show ghostty
+  ansible.builtin.command:
+    cmd: apt-cache show ghostty
   register: ghostty_apt_cache
   check_mode: false
   failed_when: false
@@ -134,6 +144,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
 
 - name: Install Ghostty via native apt
@@ -144,11 +155,13 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
     - ghostty_apt_cache.rc == 0
 
 - name: Probe snap command
-  ansible.builtin.command: which snap
+  ansible.builtin.command:
+    cmd: which snap
   register: snap_which
   check_mode: false
   failed_when: false
@@ -156,28 +169,41 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
     - ghostty_apt_cache.rc != 0
 
 - name: Install Ghostty via snap
-  ansible.builtin.command: snap install ghostty --classic
+  ansible.builtin.command:
+    cmd: snap install ghostty --classic
   become: "{{ devenv_become_package_install | bool }}"
   changed_when: true
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
     - ghostty_apt_cache.rc != 0
     - snap_which.rc == 0
 
 - name: Add Ghostty PPA on Ubuntu
-  ansible.builtin.apt_repository:
-    repo: ppa:mkasberg/ghostty-ubuntu
+  ansible.builtin.deb822_repository:
+    name: ghostty-ubuntu
+    types:
+      - deb
+    uris:
+      - https://ppa.launchpadcontent.net/mkasberg/ghostty-ubuntu/ubuntu
+    suites:
+      - "{{ ansible_facts['distribution_release'] }}"
+    components:
+      - main
+    signed_by: https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x7981725F2B0C9E295E2C368B322003C4710E280B
     state: present
   become: "{{ devenv_become_package_install | bool }}"
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
     - ghostty_apt_cache.rc != 0
     - snap_which.rc != 0
@@ -192,6 +218,7 @@
   when:
     - devenv_pkg_backend == 'apt'
     - devenv_install_gui_casks | bool
+    - not (devenv_is_wsl | default(false) | bool) or (devenv_install_gui_on_wsl | default(false) | bool)
     - ghostty_which.rc != 0
     - ghostty_apt_cache.rc != 0
     - snap_which.rc != 0

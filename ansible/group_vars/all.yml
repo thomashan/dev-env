@@ -63,6 +63,7 @@ devenv_supported_backends:
 # --- feature flags ----------------------------------------------------------
 devenv_install_homebrew: true      # Darwin only; needs interactive sudo
 devenv_install_gui_casks: true     # browsers, Docker Desktop, IDEs, ...
+devenv_install_gui_on_wsl: false   # skip Linux GUI terminal apps on WSL by default
 devenv_linux_gui_apps: []          # Linux GUI terminal apps (ghostty, warp)
 devenv_set_login_shell: true       # opt-in: chsh to fish (make login-shell)
 devenv_remove_unmanaged: false     # opt-in: purge packages in devenv_packages_remove
