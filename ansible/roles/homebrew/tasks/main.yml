@@ -66,7 +66,7 @@
 - name: Configure Homebrew taps
   community.general.homebrew_tap:
     name: "{{ item }}"
-    path: "{{ devenv_brew_bin }}"
+    path: "{{ (devenv_brew_bin | dirname) if (devenv_brew_bin is defined and (devenv_brew_bin | length > 0)) else omit }}"
   loop: "{{ devenv_brew_taps }}"
   when: devenv_brew_taps | length > 0
 
@@ -74,7 +74,7 @@
   community.general.homebrew_cask:
     name: "{{ item }}"
     state: present
-    path: "{{ devenv_brew_bin }}"
+    path: "{{ (devenv_brew_bin | dirname) if (devenv_brew_bin is defined and (devenv_brew_bin | length > 0)) else omit }}"
   loop: "{{ devenv_casks }}"
   when:
     - devenv_install_gui_casks | bool

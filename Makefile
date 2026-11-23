@@ -80,7 +80,7 @@ $(error GNU Make >= 3.81 required, found $(MAKE_VERSION))
 endif
 
 .PHONY: help check configure bootstrap install converge check-mode check-syntax dotfiles nvim-sync fisher \
-        lint test test-all docs-fmt probe-packages facts login-shell unlink clean-cache doctor
+        lint test test-all test-ubuntu docs-fmt probe-packages facts login-shell unlink clean-cache doctor
 
 help:
 	@echo "dev-env -- repository-owned development environment (make bootstraps, ansible converges)"
@@ -110,6 +110,7 @@ help:
 	@printf "  %-16s %s\n" "lint"           "ansible-lint over the playbook"
 	@printf "  %-16s %s\n" "test"           "Pytest unit tests for the manifest and role Jinja"
 	@printf "  %-16s %s\n" "test-all"       "unit tests plus the opt-in network asset checks"
+	@printf "  %-16s %s\n" "test-ubuntu"    "Build and run full Ubuntu 24.04 converge in Docker"
 	@printf "  %-16s %s\n" "docs-fmt"       "Prettier for markdown (skipped without npx)"
 	@printf "  %-16s %s\n" "clean-cache"    "Delete downloaded installers in ~/.cache/dev-env"
 	@echo ""
@@ -209,7 +210,7 @@ bootstrap:
 	@if [ -d "$(COLLECTIONS)/ansible_collections/community/general" ]; then \
 		echo "Ansible collections: ok (already installed in $(COLLECTIONS))"; \
 	else \
-		ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" "$(GALAXY)" collection install \
+		ANSIBLE_CONFIG="$(SELF_DIR)/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)" ANSIBLE_COLLECTIONS_SCAN_SYS_PATH=False "$(GALAXY)" collection install \
 			-p "$(COLLECTIONS)" -r "$(SELF_DIR)/ansible/requirements.yml" || exit 1; \
 	fi
 	@echo "Ansible: $$( "$(PB)" --version 2>/dev/null | head -1 )"
@@ -312,3 +313,8 @@ test-all:
 	else \
 		pytest $(PYTEST_EXTRA); \
 	fi
+
+test-ubuntu:
+	@command -v docker >/dev/null 2>&1 || { echo "Error: docker is required for 'make test-ubuntu'." >&2; exit 1; }
+	@docker build -f "$(SELF_DIR)/tests/docker/ubuntu.Dockerfile" -t dev-env-ubuntu-test "$(SELF_DIR)"
+	@docker run --rm dev-env-ubuntu-test

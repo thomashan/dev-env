@@ -7,12 +7,13 @@ multi-OS test coverage, static hygiene enforcement, and isolated upstream networ
 
 ## Workflows Overview
 
-| Workflow                   | File                                   | Triggers                                                               | Runner Matrix                   | Purpose                                                                                                     |
-| -------------------------- | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Make Check**             | [`make.yml`](make.yml)                 | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`, `macos-latest` | Host architecture inspection, Makefile rendering (`make help`), and prerequisite validation (`make check`). |
-| **Unit Tests**             | [`test-unit.yml`](test-unit.yml)       | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`, `macos-latest` | Multi-OS test suite execution using `uv` and Python `3.13` (`pytest -m "not network"`).                     |
-| **Code Hygiene & Lint**    | [`test-hygiene.yml`](test-hygiene.yml) | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`                 | Lockfile currency (`uv.lock`), Ruff linting, Prettier markdown validation, and `ansible-lint`.              |
-| **Network Upstream Tests** | [`test-network.yml`](test-network.yml) | Daily cron (`0 6 * * *`), `pull_request` (`main`), `workflow_dispatch` | `ubuntu-latest`                 | Verifies computed external release assets exist upstream via HEAD HTTP probes (`pytest -m network`).        |
+| Workflow                   | File                                     | Triggers                                                               | Runner Matrix                   | Purpose                                                                                                      |
+| -------------------------- | ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Make Check**             | [`make.yml`](make.yml)                   | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`, `macos-latest` | Host architecture inspection, Makefile rendering (`make help`), and prerequisite validation (`make check`).  |
+| **Unit Tests**             | [`test-unit.yml`](test-unit.yml)         | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`, `macos-latest` | Multi-OS test suite execution using `uv` and Python `3.13` (`pytest -m "not network"`).                      |
+| **Code Hygiene & Lint**    | [`test-hygiene.yml`](test-hygiene.yml)   | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`                 | Lockfile currency (`uv.lock`), Ruff linting, Prettier markdown validation, and `ansible-lint`.               |
+| **Ubuntu Converge E2E**    | [`test-converge.yml`](test-converge.yml) | `push` (`main`), `pull_request` (`main`), `workflow_dispatch`          | `ubuntu-latest`                 | Full Ubuntu/WSL bootstrap, initial converge, Fish `nvm use` re-converge, clean-env smoke test, `check-mode`. |
+| **Network Upstream Tests** | [`test-network.yml`](test-network.yml)   | Daily cron (`0 6 * * *`), `pull_request` (`main`), `workflow_dispatch` | `ubuntu-latest`                 | Verifies computed external release assets exist upstream via HEAD HTTP probes (`pytest -m network`).         |
 
 ---
 
@@ -59,7 +60,16 @@ multi-OS test coverage, static hygiene enforcement, and isolated upstream networ
   5. **Ansible Playbook Linting:** Runs `uv run --extra test ansible-lint` against `ansible/site.yml` and role
      definitions.
 
-### 4. Network Upstream Asset Tests (`test-network.yml`)
+### 4. Ubuntu Converge E2E (`test-converge.yml`)
+
+- **Runner:** `ubuntu-latest` (`timeout-minutes: 25`).
+- **Triggers:** `push` (`main`), `pull_request` (`main`), and `workflow_dispatch`.
+- **Purpose:** Executes a real end-to-end Ubuntu Linux / WSL converge (`make check`, `make bootstrap`, initial
+  `WSL_DISTRO_NAME=Ubuntu CI=true make converge`, second idempotence re-converge launched from `fish -lc` with
+  `nvm use $devenv_node_default_version` active, clean `env -i` multi-shell toolchain resolution checks across
+  `bash -lc`, `bash -lic`, `zsh -lc`, `zsh -lic`, and `fish -lc`, and post-converge `make check-mode`).
+
+### 5. Network Upstream Asset Tests (`test-network.yml`)
 
 - **Runner:** `ubuntu-latest`.
 - **Triggers:** Daily scheduled cron at 06:00 UTC (`0 6 * * *`), manual dispatch (`workflow_dispatch`), and pull
@@ -82,5 +92,6 @@ requirements:
    - `test-unit (ubuntu-latest)`
    - `test-unit (macos-latest)`
    - `hygiene`
+   - `converge-ubuntu (ubuntu-latest)`
 2. **Require branches to be up to date before merging:** Enforces fast-forward or linear rebase integration.
 3. **Do not allow bypassing the above settings:** Enforce checks across administrators and automated service accounts.

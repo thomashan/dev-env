@@ -97,7 +97,7 @@
   community.general.homebrew_cask:
     name: miniforge
     state: present
-    path: "{{ devenv_brew_bin | default(omit) }}"
+    path: "{{ (devenv_brew_bin | dirname) if (devenv_brew_bin is defined and (devenv_brew_bin | length > 0)) else omit }}"
   when:
     - devenv_discovered_conda_bin | length == 0
     - devenv_discovered_conda_dir | length == 0
@@ -107,7 +107,7 @@
   community.general.homebrew:
     name: micromamba
     state: present
-    path: "{{ devenv_brew_bin | default(omit) }}"
+    path: "{{ (devenv_brew_bin | dirname) if (devenv_brew_bin is defined and (devenv_brew_bin | length > 0)) else omit }}"
   when:
     - devenv_discovered_conda_bin | length == 0
     - devenv_discovered_conda_dir | length == 0

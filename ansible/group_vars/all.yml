@@ -205,6 +205,8 @@ devenv_links:
     dest: "{{ devenv_home }}/.config/nvim/lua/kickstart/plugins/tmux_navigator.lua"
   - src: dotfiles/tmux/.tmux.conf
     dest: "{{ devenv_home }}/.tmux.conf"
+  - src: dotfiles/zsh/.zprofile
+    dest: "{{ devenv_home }}/.zprofile"
   - src: dotfiles/zsh/.zshrc
     dest: "{{ devenv_home }}/.zshrc"
 

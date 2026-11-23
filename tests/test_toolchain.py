@@ -23,11 +23,12 @@ def test_makefile_configure_python_fallback() -> None:
 
 
 def test_makefile_galaxy_collection_install_isolated() -> None:
-    """Ansible Galaxy collection install explicitly isolates to COLLECTIONS path."""
+    """Ansible Galaxy collection install explicitly isolates to COLLECTIONS path and disables sys.path scanning."""
     makefile = read(REPO_ROOT / "Makefile")
     bootstrap_target = makefile.split("\nbootstrap:")[1].split("\nconfigure:")[0]
     assert '-p "$(COLLECTIONS)"' in bootstrap_target
     assert 'ANSIBLE_COLLECTIONS_PATH="$(COLLECTIONS)"' in bootstrap_target
+    assert "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH=False" in bootstrap_target
 
 
 def test_ansible_cfg_collections_path_fallback() -> None:
@@ -389,3 +390,87 @@ def test_node_role_unified_nvm_versions_node_paths() -> None:
     assert current_file.get("src") == "{{ devenv_home }}/.local/share/nvm/versions/node/v{{ devenv_node_version }}"
     assert current_file.get("dest") == "{{ devenv_home }}/.local/share/nvm/current"
     assert current_file.get("state") == "link"
+
+
+def test_node_role_clean_env_shell_probes_and_canonical_path_assertions() -> None:
+    """Node role probes bash, zsh, and fish under clean env -i and accepts canonical versions/node/v paths."""
+    node_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "node" / "tasks" / "main.yml"))
+
+    for shell_name, probe_var, verify_var in [
+        ("bash", "devenv_has_bash", "devenv_node_which_bash"),
+        ("zsh", "devenv_has_zsh", "devenv_node_which_zsh"),
+        ("fish", "devenv_has_fish", "devenv_node_which"),
+    ]:
+        which_task = next((t for t in node_tasks if t.get("register") == probe_var), None)
+        assert which_task is not None, f"Missing 'which {shell_name}' availability task ({probe_var})"
+        assert which_task.get("ansible.builtin.command", {}).get("cmd") == f"which {shell_name}"
+        assert which_task.get("changed_when") is False
+        assert which_task.get("failed_when") is False
+        assert which_task.get("check_mode") is False
+
+        verify_task = next((t for t in node_tasks if t.get("register") == verify_var), None)
+        assert verify_task is not None, f"Missing node login-shell probe task ({verify_var})"
+        assert verify_task.get("changed_when") is False
+        assert verify_task.get("check_mode") is False
+        cmd_block = verify_task.get("ansible.builtin.command", {})
+        assert cmd_block.get("expand_argument_vars") is False
+        cmd_str = cmd_block.get("cmd", "")
+        assert "env -i" in cmd_str
+        assert f"{shell_name} -lc" in cmd_str
+        assert "which node; node -v" in cmd_str
+        assert f"({probe_var}.stdout | trim) | dirname" in cmd_str
+        assert verify_task.get("when") == ["not ansible_check_mode", f"{probe_var}.rc == 0"]
+
+        assert_task = next(
+            (
+                t
+                for t in node_tasks
+                if isinstance(t.get("ansible.builtin.assert"), dict)
+                and any(f"{verify_var}.stdout" in cond for cond in t["ansible.builtin.assert"].get("that", []))
+            ),
+            None,
+        )
+        assert assert_task is not None, f"Missing ansible.builtin.assert task for {verify_var}"
+        assert assert_task.get("when") == ["not ansible_check_mode", f"{probe_var}.rc == 0"]
+        that_conds = assert_task["ansible.builtin.assert"].get("that", [])
+        path_cond = that_conds[0]
+        assert f"'.local/share/nvm/current/bin/node' in {verify_var}.stdout" in path_cond
+        assert f"'.local/bin/node' in {verify_var}.stdout" in path_cond
+        assert (
+            f"('.local/share/nvm/versions/node/v' ~ devenv_node_version ~ '/bin/node') in {verify_var}.stdout"
+            in path_cond
+        )
+        assert f"'v' ~ devenv_node_version in {verify_var}.stdout" in that_conds[1]
+
+
+def test_fish_role_find_follows_stow_symlinks() -> None:
+    """Fish role Collect linked fish files task sets follow: true and file_type: any so GNU Stow symlinks are syntax-checked."""
+    fish_tasks = yaml.safe_load(read(REPO_ROOT / "ansible" / "roles" / "fish" / "tasks" / "main.yml"))
+    collect_task = next((t for t in fish_tasks if t.get("name") == "Collect linked fish files"), None)
+    assert collect_task is not None, "Missing 'Collect linked fish files' task in fish role"
+    assert collect_task.get("ansible.builtin.find", {}).get("follow") is True
+    assert collect_task.get("ansible.builtin.find", {}).get("file_type") == "any"
+
+
+def test_homebrew_module_tasks_pass_dirname_to_path() -> None:
+    """Every community.general.homebrew* task across roles passes devenv_brew_bin | dirname to path."""
+    role_names = ("homebrew", "packages", "conda", "neovim")
+    brew_modules = (
+        "community.general.homebrew",
+        "community.general.homebrew_tap",
+        "community.general.homebrew_cask",
+    )
+    checked_count = 0
+    for role_name in role_names:
+        role_path = REPO_ROOT / "ansible" / "roles" / role_name / "tasks" / "main.yml"
+        tasks = yaml.safe_load(read(role_path)) or []
+        for task_def in tasks:
+            for mod_name in brew_modules:
+                if mod_name in task_def:
+                    checked_count += 1
+                    path_param = task_def[mod_name].get("path", "")
+                    assert "devenv_brew_bin | dirname" in path_param, (
+                        f"{role_name} :: {task_def.get('name')} ({mod_name}) must pass "
+                        f"devenv_brew_bin | dirname to path, got {path_param!r}"
+                    )
+    assert checked_count == 7, f"Expected 7 community.general.homebrew* tasks across roles, found {checked_count}"

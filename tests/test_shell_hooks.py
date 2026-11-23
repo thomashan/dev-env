@@ -73,6 +73,7 @@ def _link_repo_dotfiles(fake_home: Path) -> None:
     links = {
         fake_home / ".bashrc": REPO_ROOT / "dotfiles" / "bash" / ".bashrc",
         fake_home / ".bash_profile": REPO_ROOT / "dotfiles" / "bash" / ".bash_profile",
+        fake_home / ".zprofile": REPO_ROOT / "dotfiles" / "zsh" / ".zprofile",
         fake_home / ".zshrc": REPO_ROOT / "dotfiles" / "zsh" / ".zshrc",
         fake_home / ".config" / "fish" / "config.fish": (
             REPO_ROOT / "dotfiles" / "fish" / ".config" / "fish" / "config.fish"
@@ -85,11 +86,6 @@ def _link_repo_dotfiles(fake_home: Path) -> None:
         if dest.exists() or dest.is_symlink():
             dest.unlink()
         dest.symlink_to(src)
-
-    # Ensure non-interactive login zsh (`zsh -lc`) also evaluates `.zshrc` in the
-    # hermetic test home without tracking an extra dotfile outside devenv_links.
-    zprofile = fake_home / ".zprofile"
-    zprofile.write_text('[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"\n', encoding="utf-8")
 
 
 def _build_hermetic_conda_and_nvm_home(tmp_path: Path) -> tuple[Path, Path]:
@@ -381,7 +377,7 @@ def test_ansible_conda_clean_env_shell_verification_playbook(tmp_path: Path) -> 
 
 
 def test_ci_unit_workflow_installs_fish_and_zsh() -> None:
-    """Verify .github/workflows/test-unit.yml installs fish and zsh before running pytest."""
+    """Verify .github/workflows/test-unit.yml installs fish, zsh, and stow before running pytest."""
     workflow_path = REPO_ROOT / ".github" / "workflows" / "test-unit.yml"
     raw_content = read(workflow_path)
     assert "apt-get" not in raw_content, "test-unit.yml must use apt, never apt-get"
@@ -391,18 +387,74 @@ def test_ci_unit_workflow_installs_fish_and_zsh() -> None:
     runs = [s.get("run", "") for s in steps]
 
     ubuntu_idx = next(
-        (i for i, r in enumerate(runs) if "sudo apt update && sudo apt install -y fish zsh" in r),
+        (i for i, r in enumerate(runs) if "sudo apt update && sudo apt install -y fish zsh stow" in r),
         -1,
     )
-    macos_idx = next((i for i, r in enumerate(runs) if "brew install fish" in r), -1)
+    macos_idx = next((i for i, r in enumerate(runs) if "brew install fish stow" in r), -1)
     pytest_idx = next((i for i, r in enumerate(runs) if "pytest" in r), -1)
 
-    assert ubuntu_idx != -1, "test-unit.yml must install fish and zsh on Ubuntu via apt"
-    assert macos_idx != -1, "test-unit.yml must install fish on macOS via brew"
+    assert ubuntu_idx != -1, "test-unit.yml must install fish, zsh, and stow on Ubuntu via apt"
+    assert macos_idx != -1, "test-unit.yml must install fish and stow on macOS via brew"
     assert pytest_idx != -1, "test-unit.yml must run pytest"
     assert ubuntu_idx < pytest_idx and macos_idx < pytest_idx, (
         "Shell installation steps in test-unit.yml must run before pytest"
     )
+
+
+def test_zprofile_is_tracked_in_devenv_links_and_does_not_double_source_zshrc(tmp_path: Path) -> None:
+    """Verify tracked dotfiles/zsh/.zprofile is in devenv_links, symlinked without fake shims, and single-sources .zshrc."""
+    zprofile_repo = REPO_ROOT / "dotfiles" / "zsh" / ".zprofile"
+    assert zprofile_repo.is_file(), "dotfiles/zsh/.zprofile must exist in the repository"
+
+    group_vars = yaml.safe_load(read(REPO_ROOT / "ansible" / "group_vars" / "all.yml"))
+    links = group_vars.get("devenv_links", [])
+    assert {"src": "dotfiles/zsh/.zprofile", "dest": "{{ devenv_home }}/.zprofile"} in links, (
+        "dotfiles/zsh/.zprofile must be declared in devenv_links"
+    )
+
+    fake_home = tmp_path / "zprofile_home"
+    _link_repo_dotfiles(fake_home)
+
+    dotfiles_root = (REPO_ROOT / "dotfiles").resolve()
+    created_files = [p for p in fake_home.rglob("*") if p.is_file() or p.is_symlink()]
+    assert created_files, "Expected _link_repo_dotfiles to link dotfiles into fake_home"
+    for p in created_files:
+        assert p.is_symlink(), f"{p} must be a symlink, not a synthetic regular file"
+        assert p.resolve().is_relative_to(dotfiles_root), f"{p} must resolve inside {dotfiles_root}"
+
+    (fake_home / ".zshrc.local").write_text(
+        "export DEVENV_ZSHRC_SOURCE_COUNT=$(( ${DEVENV_ZSHRC_SOURCE_COUNT:-0} + 1 ))\n",
+        encoding="utf-8",
+    )
+    (fake_home / ".zprofile.local").write_text(
+        "export DEVENV_ZPROFILE_LOCAL_LOADED=1\n",
+        encoding="utf-8",
+    )
+
+    zsh_bin = _require_shell("zsh")
+    zsh_dir = str(Path(zsh_bin).resolve().parent)
+
+    for flags in ("-lc", "-lic"):
+        proc = subprocess.run(
+            [
+                "env",
+                "-i",
+                f"HOME={fake_home}",
+                f"ZDOTDIR={fake_home}",
+                "USER=testuser",
+                "TERM=dumb",
+                f"PATH={zsh_dir}:/usr/bin:/bin:/usr/sbin:/sbin",
+                zsh_bin,
+                flags,
+                'echo "COUNT=${DEVENV_ZSHRC_SOURCE_COUNT:-0}"; echo "LOCAL=${DEVENV_ZPROFILE_LOCAL_LOADED:-0}"',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"zsh {flags} failed:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        assert "COUNT=1" in proc.stdout.splitlines(), f"zsh {flags} must source .zshrc exactly once:\n{proc.stdout}"
+        assert "LOCAL=1" in proc.stdout.splitlines(), f"zsh {flags} must source .zprofile.local:\n{proc.stdout}"
 
 
 def test_fish_syntax_check() -> None:

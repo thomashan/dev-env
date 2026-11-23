@@ -1,0 +1,44 @@
+name: Ubuntu Converge E2E
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  converge-ubuntu:
+    name: converge-ubuntu (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run prerequisite probe (make check)
+        run: make check
+
+      - name: Bootstrap Conda and Ansible (make bootstrap)
+        run: make bootstrap
+
+      - name: First full converge (simulating Ubuntu WSL)
+        run: WSL_DISTRO_NAME=Ubuntu CI=true make converge ANSIBLE_EXTRA="-e devenv_set_login_shell=false -e devenv_install_gui_casks=false"
+
+      - name: Second full converge from Fish with nvm.fish active (idempotence & PATH isolation)
+        run: WSL_DISTRO_NAME=Ubuntu CI=true fish -lc 'nvm use $devenv_node_default_version; make converge ANSIBLE_EXTRA="-e devenv_set_login_shell=false -e devenv_install_gui_casks=false"'
+
+      - name: Clean-environment multi-shell smoke test and post-converge check-mode
+        run: |
+          for shell_cmd in "bash -lc" "bash -lic" "zsh -lc" "zsh -lic" "fish -lc"; do
+            echo "=== Verifying clean-env toolchain resolution under: $shell_cmd ==="
+            env -i HOME="$HOME" USER="${USER:-runner}" TERM=dumb PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+              $shell_cmd 'which node; node -v; type conda; which uv; which ruff; which nvim; which stow; which tmux'
+          done
+          WSL_DISTRO_NAME=Ubuntu CI=true make check-mode ANSIBLE_EXTRA="-e devenv_set_login_shell=false -e devenv_install_gui_casks=false"
