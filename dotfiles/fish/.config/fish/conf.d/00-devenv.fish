@@ -19,6 +19,34 @@ switch (uname)
 end
 set -gx devenv_arch (uname -m)
 
+# --- Multi-OS Homebrew / Linuxbrew Environment ------------------------------
+switch "$devenv_os"
+    case Darwin
+        if test -x /opt/homebrew/bin/brew
+            if not contains /opt/homebrew/bin $PATH
+                /opt/homebrew/bin/brew shellenv | source
+            end
+        else if test -x /usr/local/bin/brew
+            if not contains /usr/local/bin $PATH
+                /usr/local/bin/brew shellenv | source
+            end
+        end
+    case Linux
+        if test -x /home/linuxbrew/.linuxbrew/bin/brew
+            if not contains /home/linuxbrew/.linuxbrew/bin $PATH
+                /home/linuxbrew/.linuxbrew/bin/brew shellenv | source
+            end
+        else if test -x "$HOME/.linuxbrew/bin/brew"
+            if not contains "$HOME/.linuxbrew/bin" $PATH
+                "$HOME/.linuxbrew/bin/brew" shellenv | source
+            end
+        else if test -d /home/linuxbrew/.linuxbrew/bin
+            if not contains /home/linuxbrew/.linuxbrew/bin $PATH
+                fish_add_path -gpP /home/linuxbrew/.linuxbrew/bin /home/linuxbrew/.linuxbrew/sbin
+            end
+        end
+end
+
 # --- nvm.fish: XDG-based node state + pinned default ------------------------
 set -q XDG_DATA_HOME || set -gx XDG_DATA_HOME "$HOME/.local/share"
 set -g nvm_data $XDG_DATA_HOME/nvm/versions/node
@@ -56,25 +84,71 @@ if test -f "$HOME/.config/node/node-extra-ca.pem"
     set -gx NODE_EXTRA_CA_CERTS "$HOME/.config/node/node-extra-ca.pem"
 end
 
-# --- micromamba discovery and conda alias / hook integration ---
-if not command -q conda
-    if command -q micromamba
-        alias conda=micromamba
-    else if test -x /home/linuxbrew/.linuxbrew/bin/micromamba
-        alias conda=/home/linuxbrew/.linuxbrew/bin/micromamba
-    else if test -x "$HOME/.linuxbrew/bin/micromamba"
-        alias conda="$HOME/.linuxbrew/bin/micromamba"
+# --- Conda (Miniforge / Micromamba) Shell Hook Probe and Activation ---------
+set -l conda_hook_activated 0
+set -l conda_candidates
+if set -q MAMBA_ROOT_PREFIX; and test -n "$MAMBA_ROOT_PREFIX"
+    set -a conda_candidates "$MAMBA_ROOT_PREFIX"
+end
+set -a conda_candidates "$HOME/.local/share/mamba" "$HOME/micromamba" \
+    "$HOME/miniforge3" "$HOME/miniforge" "$HOME/mambaforge"
+switch "$devenv_os"
+    case Darwin
+        set -a conda_candidates /opt/homebrew/Caskroom/miniforge/base /usr/local/Caskroom/miniforge/base
+end
+set -a conda_candidates /opt/miniforge3 /opt/conda "$HOME/anaconda3" "$HOME/miniconda3"
+
+for conda_root in $conda_candidates
+    if test -n "$conda_root"; and test -x "$conda_root/bin/conda"
+        "$conda_root/bin/conda" shell.fish hook 2>/dev/null | source
+        set conda_hook_activated 1
+        break
     end
 end
 
-if command -q micromamba
-    if set -q MAMBA_ROOT_PREFIX; and test -d "$MAMBA_ROOT_PREFIX"
-        micromamba shell hook --shell fish 2>/dev/null | source
-    else if test -d "$HOME/.local/share/mamba"
-        micromamba shell hook --shell fish 2>/dev/null | source
-    else if test -d "$HOME/micromamba"
-        micromamba shell hook --shell fish 2>/dev/null | source
+# --- micromamba discovery and conda alias / hook integration ---
+if test $conda_hook_activated -eq 0
+    if not command -q conda
+        if command -q micromamba
+            alias conda=micromamba
+        else if test -x /home/linuxbrew/.linuxbrew/bin/micromamba
+            alias conda=/home/linuxbrew/.linuxbrew/bin/micromamba
+        else if test -x "$HOME/.linuxbrew/bin/micromamba"
+            alias conda="$HOME/.linuxbrew/bin/micromamba"
+        end
     end
+
+    if command -q micromamba
+        if set -q MAMBA_ROOT_PREFIX; and test -d "$MAMBA_ROOT_PREFIX"
+            micromamba shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/.local/share/mamba"
+            micromamba shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/micromamba"
+            micromamba shell hook --shell fish 2>/dev/null | source
+        end
+    else if test -x /home/linuxbrew/.linuxbrew/bin/micromamba
+        if set -q MAMBA_ROOT_PREFIX; and test -d "$MAMBA_ROOT_PREFIX"
+            /home/linuxbrew/.linuxbrew/bin/micromamba shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/.local/share/mamba"
+            /home/linuxbrew/.linuxbrew/bin/micromamba shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/micromamba"
+            /home/linuxbrew/.linuxbrew/bin/micromamba shell hook --shell fish 2>/dev/null | source
+        end
+    else if test -x "$HOME/.linuxbrew/bin/micromamba"
+        if set -q MAMBA_ROOT_PREFIX; and test -d "$MAMBA_ROOT_PREFIX"
+            "$HOME/.linuxbrew/bin/micromamba" shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/.local/share/mamba"
+            "$HOME/.linuxbrew/bin/micromamba" shell hook --shell fish 2>/dev/null | source
+        else if test -d "$HOME/micromamba"
+            "$HOME/.linuxbrew/bin/micromamba" shell hook --shell fish 2>/dev/null | source
+        end
+    end
+end
+
+# --- Re-assert NVM and user local binary precedence after Homebrew/Conda ----
+fish_add_path -gpPm "$XDG_DATA_HOME/nvm/current/bin"
+if test -d "$HOME/.local/bin"
+    fish_add_path -gpPm "$HOME/.local/bin"
 end
 
 # --- Go toolchain PATH export ---
