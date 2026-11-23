@@ -139,14 +139,15 @@ def test_missing_alias_is_caught_by_the_guard_and_is_loud(templar, group_vars, a
     carry a hole into `brew install`/`apt install` were the guard not there.
     """
     guard = task("bootstrap", "Fail when a logical package has no alias")["ansible.builtin.assert"]["that"][1]
-    complete = {"devenv_packages_wanted": list(group_vars["devenv_packages_core"]),
-                "devenv_pkg_aliases": alias_tables["apt"]}
+    complete = {
+        "devenv_packages_wanted": list(group_vars["devenv_packages_core"]),
+        "devenv_pkg_aliases": alias_tables["apt"],
+    }
     assert templar(guard, complete) is True
 
     broken_aliases = dict(alias_tables["apt"])
     dropped = broken_aliases.pop("fzf")
-    broken = {"devenv_packages_wanted": list(group_vars["devenv_packages_core"]),
-              "devenv_pkg_aliases": broken_aliases}
+    broken = {"devenv_packages_wanted": list(group_vars["devenv_packages_core"]), "devenv_pkg_aliases": broken_aliases}
     assert templar(guard, broken) is False
     with pytest.raises(AnsibleUndefinedVariable):
         templar(concrete_expr(), broken)
@@ -156,15 +157,25 @@ def test_missing_alias_is_caught_by_the_guard_and_is_loud(templar, group_vars, a
 @pytest.mark.parametrize("backend", ["brew", "apt"])
 def test_backend_guard_admits_only_configured_backends(templar, group_vars, backend):
     fail_when = task("bootstrap", "Fail early on an unsupported package backend")["when"]
-    assert templar(fail_when, {"devenv_pkg_backend": backend,
-                               "devenv_supported_backends": group_vars["devenv_supported_backends"]}) is False
+    assert (
+        templar(
+            fail_when,
+            {"devenv_pkg_backend": backend, "devenv_supported_backends": group_vars["devenv_supported_backends"]},
+        )
+        is False
+    )
 
 
 @pytest.mark.parametrize("backend", ["dnf", "pacman", "port", "zypper", "unsupported"])
 def test_backend_guard_rejects_the_rest(templar, group_vars, backend):
     fail_when = task("bootstrap", "Fail early on an unsupported package backend")["when"]
-    assert templar(fail_when, {"devenv_pkg_backend": backend,
-                               "devenv_supported_backends": group_vars["devenv_supported_backends"]}) is True
+    assert (
+        templar(
+            fail_when,
+            {"devenv_pkg_backend": backend, "devenv_supported_backends": group_vars["devenv_supported_backends"]},
+        )
+        is True
+    )
 
 
 def test_node_pin_is_parsed_from_the_real_fish_config(templar):
@@ -278,8 +289,12 @@ def test_chsh_only_runs_when_the_shell_actually_changes(templar):
     """changed_when must not fire on every converge (idempotence requirement)."""
     chsh = task("fish", "Set fish as the login shell")
     condition = next(c for c in chsh["when"] if "SHELL" in c)
-    same = templar(condition, {"ansible_facts": {"env": {"SHELL": "/usr/bin/fish"}}, "devenv_fish_bin": "/usr/bin/fish"})
-    different = templar(condition, {"ansible_facts": {"env": {"SHELL": "/bin/zsh"}}, "devenv_fish_bin": "/usr/bin/fish"})
+    same = templar(
+        condition, {"ansible_facts": {"env": {"SHELL": "/usr/bin/fish"}}, "devenv_fish_bin": "/usr/bin/fish"}
+    )
+    different = templar(
+        condition, {"ansible_facts": {"env": {"SHELL": "/bin/zsh"}}, "devenv_fish_bin": "/usr/bin/fish"}
+    )
     assert same is False and different is True
 
 
@@ -652,3 +667,66 @@ def test_ansible_dotfiles_converge_with_stale_choices_and_stow(tmp_path, link_ma
     ghostty = home / ".config" / "ghostty" / "config.ghostty"
     assert ghostty.is_symlink()
     assert ghostty.resolve() == (REPO_ROOT / "dotfiles/ghostty/.config/ghostty/config.ghostty").resolve()
+
+
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [
+        ({"system": "Linux", "kernel": "5.15.153.1-microsoft-standard-WSL2", "env": {}}, True),
+        ({"system": "Linux", "kernel": "6.6.36-linuxkit", "env": {"WSL_DISTRO_NAME": "Ubuntu"}}, True),
+        ({"system": "Linux", "kernel": "6.6.36-linuxkit", "env": {"WSL_INTEROP": "/run/WSL/12_interop"}}, True),
+        ({"system": "Linux", "kernel": "6.8.0-45-generic", "env": {}}, False),
+        ({"system": "Darwin", "kernel": "23.5.0", "env": {"WSL_DISTRO_NAME": "Ubuntu"}}, False),
+    ],
+)
+def test_bootstrap_devenv_is_wsl_classification(templar, facts: dict, expected: bool) -> None:
+    """Bootstrap role classifies WSL hosts via kernel string or WSL environment variables on Linux."""
+    expr = set_fact_expression("bootstrap", "Classify host platform", "devenv_is_wsl")
+    assert templar(expr, {"ansible_facts": facts}) is expected
+
+
+def test_packages_gui_terminal_tasks_skipped_on_wsl(templar) -> None:
+    """All 12 Linux Warp and Ghostty tasks evaluate their WSL guard to False when devenv_is_wsl is True."""
+    gui_terminal_task_names = [
+        "Probe Warp terminal binary",
+        "Ensure APT keyrings directory exists",
+        "Fetch and dearmor Warp GPG signing key",
+        "Configure Warp APT repository",
+        "Install Warp terminal via apt",
+        "Probe Ghostty binary",
+        "Probe native Ghostty apt package availability",
+        "Install Ghostty via native apt",
+        "Probe snap command",
+        "Install Ghostty via snap",
+        "Add Ghostty PPA on Ubuntu",
+        "Install Ghostty from PPA on Ubuntu",
+    ]
+    for task_name in gui_terminal_task_names:
+        task_def = task("packages", task_name)
+        when_list = task_def["when"]
+        wsl_cond = next((c for c in when_list if "devenv_is_wsl" in c), None)
+        assert wsl_cond is not None, f"{task_name} missing devenv_is_wsl guard"
+        assert bool(templar(wsl_cond, {"devenv_is_wsl": True})) is False
+        assert bool(templar(wsl_cond, {"devenv_is_wsl": False})) is True
+        assert bool(templar(wsl_cond, {})) is True
+
+
+@pytest.mark.parametrize("playbook_relpath", ["ansible/site.yml", "ansible/playbooks/unlink.yml"])
+def test_playbooks_syntax_check_zero_deprecation_warnings(tmp_path: Path, playbook_relpath: str) -> None:
+    """Running ansible-playbook --syntax-check with ANSIBLE_DEPRECATION_WARNINGS=True emits zero warnings."""
+    playbook = ansible_playbook_bin()
+    if playbook is None:
+        pytest.skip("ansible-playbook not available in this environment")
+    env = {
+        **os.environ,
+        "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+        "ANSIBLE_COLLECTIONS_PATH": collections_path(tmp_path / "collections-syntax"),
+        "ANSIBLE_DEPRECATION_WARNINGS": "True",
+        "ANSIBLE_FORCE_COLOR": "0",
+        "ANSIBLE_NOCOLOR": "1",
+    }
+    cmd = [playbook, "--syntax-check", str(REPO_ROOT / playbook_relpath)]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=120, check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "[DEPRECATION WARNING]" not in proc.stderr, proc.stderr
+    assert "DEPRECATION WARNING" not in proc.stderr, proc.stderr

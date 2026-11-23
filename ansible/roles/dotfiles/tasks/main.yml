@@ -9,6 +9,7 @@
   register: devenv_stow_bin
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Assert GNU Stow is available
   ansible.builtin.assert:
@@ -18,6 +19,7 @@
       GNU Stow was not found on PATH. stow is a hard prerequisite for dotfiles
       management. Please install stow via your package manager or run the packages role.
     quiet: true
+  when: not ansible_check_mode or devenv_stow_bin.rc == 0
 
 - name: Unstow inactive variant packages
   ansible.builtin.command:
@@ -27,10 +29,13 @@
       -d "{{ devenv_repo_root }}/dotfiles"
       -t "{{ devenv_home }}"
       {{ devenv_inactive_packages | join(' ') }}
-  when: (devenv_inactive_packages | default([])) | length > 0
+  when:
+    - (devenv_inactive_packages | default([])) | length > 0
+    - not ansible_check_mode or devenv_stow_bin.rc == 0
   register: devenv_unstow_inactive
   changed_when: "'UNLINK:' in devenv_unstow_inactive.stderr"
   failed_when: false
+  check_mode: false
 
 - name: Filter out skipped link paths
   ansible.builtin.set_fact:
@@ -173,9 +178,12 @@
       -d "{{ devenv_repo_root }}/dotfiles"
       -t "{{ devenv_home }}"
       {{ devenv_stow_packages | join(' ') }}
-  when: (devenv_stow_packages | default([])) | length > 0
+  when:
+    - (devenv_stow_packages | default([])) | length > 0
+    - not ansible_check_mode or devenv_stow_bin.rc == 0
   register: devenv_stow_result
   changed_when: "'LINK:' in devenv_stow_result.stderr or 'UNLINK:' in devenv_stow_result.stderr"
+  check_mode: false
 
 # Post-conditions are only meaningful after links were actually created; in a
 # dry run nothing was linked, so verifying would report false failures.
