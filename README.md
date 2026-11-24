@@ -178,7 +178,9 @@ remain real local folders:
 - `dotfiles/fish/` (**Terminal / Shell (Fish)**): `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
 - `dotfiles/ghostty/` (**Terminal / Emulator (Ghostty)**): `.config/ghostty/config.ghostty` (unbinds Option+Arrow keys
   to prevent interception before tmux horizontal pane resizing)
-- `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.tmux.conf`
+- `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.tmux.conf` (mouse support, `vim-tmux-navigator` smart pane
+  switching, current-path splits/windows, and `extended-keys` / `Shift+Enter` forwarding for multiline input in modern
+  TUIs such as Claude Code across macOS and Windows/WSL)
 - `dotfiles/zsh/` (**Terminal / Shell (Zsh)**): `.zshrc` (with `.local` override hooks)
 - **Neovim Multi-Variant Packages (`devenv_package_variants.nvim`)** (**Editor / IDE (Neovim / Lua)**):
   - `nvim-kickstart` (`dotfiles/nvim-kickstart/`): Full Kickstart.nvim configuration with `vim.pack`, LSP, Treesitter,

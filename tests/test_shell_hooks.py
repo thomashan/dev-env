@@ -377,7 +377,7 @@ def test_ansible_conda_clean_env_shell_verification_playbook(tmp_path: Path) -> 
 
 
 def test_ci_unit_workflow_installs_fish_and_zsh() -> None:
-    """Verify .github/workflows/test-unit.yml installs fish, zsh, and stow before running pytest."""
+    """Verify .github/workflows/test-unit.yml installs fish, zsh, stow, and tmux before running pytest."""
     workflow_path = REPO_ROOT / ".github" / "workflows" / "test-unit.yml"
     raw_content = read(workflow_path)
     assert "apt-get" not in raw_content, "test-unit.yml must use apt, never apt-get"
@@ -387,17 +387,17 @@ def test_ci_unit_workflow_installs_fish_and_zsh() -> None:
     runs = [s.get("run", "") for s in steps]
 
     ubuntu_idx = next(
-        (i for i, r in enumerate(runs) if "sudo apt update && sudo apt install -y fish zsh stow" in r),
+        (i for i, r in enumerate(runs) if "sudo apt update && sudo apt install -y fish zsh stow tmux" in r),
         -1,
     )
-    macos_idx = next((i for i, r in enumerate(runs) if "brew install fish stow" in r), -1)
+    macos_idx = next((i for i, r in enumerate(runs) if "brew install fish stow tmux" in r), -1)
     pytest_idx = next((i for i, r in enumerate(runs) if "pytest" in r), -1)
 
-    assert ubuntu_idx != -1, "test-unit.yml must install fish, zsh, and stow on Ubuntu via apt"
-    assert macos_idx != -1, "test-unit.yml must install fish and stow on macOS via brew"
+    assert ubuntu_idx != -1, "test-unit.yml must install fish, zsh, stow, and tmux on Ubuntu via apt"
+    assert macos_idx != -1, "test-unit.yml must install fish, stow, and tmux on macOS via brew"
     assert pytest_idx != -1, "test-unit.yml must run pytest"
     assert ubuntu_idx < pytest_idx and macos_idx < pytest_idx, (
-        "Shell installation steps in test-unit.yml must run before pytest"
+        "Shell and tmux installation steps in test-unit.yml must run before pytest"
     )
 
 
