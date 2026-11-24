@@ -144,9 +144,13 @@ def _ensure_terminfo_env(term: str, tmp_path: Path) -> dict[str, str]:
 
 
 def _drain_fd(fd: int, max_duration: float, idle_window: float) -> None:
-    """Drain readable bytes from a PTY master fd without blocking."""
+    """Drain readable bytes from a PTY master fd without blocking.
+
+    Waits for at least one byte to be read before applying ``idle_window`` so
+    slow startup cannot exit early before initial output arrives.
+    """
     end_time = time.monotonic() + max_duration
-    last_read = time.monotonic()
+    last_read: float | None = None
     while time.monotonic() < end_time:
         remaining = max(0.01, min(0.05, end_time - time.monotonic()))
         ready, _, _ = select.select([fd], [], [], remaining)
@@ -158,7 +162,7 @@ def _drain_fd(fd: int, max_duration: float, idle_window: float) -> None:
             if not chunk:
                 break
             last_read = time.monotonic()
-        elif time.monotonic() - last_read >= idle_window:
+        elif last_read is not None and time.monotonic() - last_read >= idle_window:
             break
 
 
@@ -223,7 +227,7 @@ def _run_tmux_pty_capture(tmux_bin: str, term: str, payload: bytes, tmp_path: Pa
         slave_fd = None
 
         # Drain initial attach redraw output so tmux completes client setup.
-        _drain_fd(master_fd, max_duration=0.6, idle_window=0.15)
+        _drain_fd(master_fd, max_duration=2.0, idle_window=0.15)
         assert client_proc.poll() is None, (
             f"tmux attach-session exited early ({client_proc.returncode}) for TERM={term}"
         )
