@@ -11,6 +11,12 @@
 keybind = alt+arrow_left=unbind
 keybind = alt+arrow_right=unbind
 
-# Leave shift+enter at Ghostty's native extended-key reporting default
-# (do not rebind shift+enter to \r or \n) so modified Enter passes cleanly
-# into tmux and modern TUIs such as Claude Code.
+# Under tmux 3.8 modifyOtherKeys=2 (ESC[>4;2m), macOS Ghostty 1.4.0 emits 0x0a
+# (LF, identical to Ctrl-J) on Shift+Enter. Because dotfiles/tmux/.tmux.conf
+# binds C-j globally for vim-tmux-navigator (select-pane -D), tmux intercepts
+# 0x0a and swallows Shift+Enter completely (0 bytes reach the pane).
+# Mapping shift+enter to ESC+CR (\x1b\r) passes through tmux cleanly and is
+# recognized as a newline by Claude Code and other TUIs across macOS and
+# Ubuntu WSL SSH sessions.
+keybind = shift+enter=text:\x1b\r
+

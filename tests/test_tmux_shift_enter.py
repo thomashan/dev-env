@@ -4,9 +4,12 @@ Verifies that:
 1. ``dotfiles/tmux/.tmux.conf`` configures ``extended-keys always``, quiet
    ``extended-keys-format csi-u`` (compatible with both tmux 3.4 on Ubuntu/WSL
    and tmux 3.5+ on macOS Homebrew), and ``xterm*:extkeys`` terminal features.
-2. ``dotfiles/ghostty/.config/ghostty/config.ghostty`` preserves native
-   extended-key reporting for ``shift+enter`` without rebinding it to a plain
-   carriage return or raw newline.
+2. ``dotfiles/ghostty/.config/ghostty/config.ghostty`` preserves Option+Arrow
+   unbinds and maps ``shift+enter`` to ``text:\\x1b\\r`` (``ESC+CR``) rather
+   than raw ``\\r`` or ``\\n`` (``0x0a``), validates cleanly via
+   ``ghostty +validate-config`` when Ghostty is installed, and passes its
+   decoded ``ESC+CR`` byte sequence intact through a live tmux PTY session
+   loaded with ``bind-key -n C-j``.
 3. ``dotfiles/tmux/.tmux.conf`` loads cleanly with exit code 0 and empty stderr.
 4. Live real-tmux PTY sessions under both ``TERM=xterm-256color`` and
    ``TERM=xterm-ghostty`` forward CSI-u and modifyOtherKeys Shift+Enter
@@ -17,6 +20,7 @@ Verifies that:
 
 from __future__ import annotations
 
+import codecs
 import os
 import pty
 import select
@@ -292,18 +296,79 @@ def test_tmux_conf_extended_keys_directives() -> None:
     assert "set -as terminal-features 'xterm*:extkeys'" in active_lines
 
 
-def test_ghostty_config_preserves_native_shift_enter() -> None:
-    """Verify Ghostty config preserves native shift+enter reporting and Option+Arrow unbinds."""
+def _find_ghostty_binary() -> str | None:
+    """Resolve the Ghostty binary if installed on the host, or return None."""
+    resolved = shutil.which("ghostty")
+    if resolved is not None:
+        return resolved
+    if sys.platform == "darwin":
+        macos_app = Path("/Applications/Ghostty.app/Contents/MacOS/ghostty")
+        if macos_app.is_file() and os.access(macos_app, os.X_OK):
+            return str(macos_app)
+    return None
+
+
+def _parse_ghostty_shift_enter_bytes() -> bytes:
+    """Parse and decode the configured ``shift+enter`` text escape sequence from Ghostty config."""
+    active_lines = [
+        line.strip() for line in read(GHOSTTY_CONF).splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
+    matches: list[tuple[str, str]] = []
+    for line in active_lines:
+        key_parts = line.split("=", maxsplit=1)
+        if len(key_parts) != 2 or key_parts[0].strip().lower() != "keybind":
+            continue
+        binding_parts = key_parts[1].strip().split("=", maxsplit=1)
+        if len(binding_parts) != 2:
+            continue
+        trigger, action = binding_parts[0].strip().lower(), binding_parts[1].strip()
+        if trigger == "shift+enter":
+            matches.append((line, action))
+
+    assert len(matches) == 1, f"Expected exactly one shift+enter keybind in {GHOSTTY_CONF}, found: {matches!r}"
+    line, action = matches[0]
+    assert action.startswith("text:"), f"Expected shift+enter keybind to use text: action, got: {line}"
+    raw_text = action[len("text:") :]
+    return codecs.decode(raw_text, "unicode_escape").encode("latin-1")
+
+
+def test_ghostty_config_maps_shift_enter_to_esc_cr() -> None:
+    """Verify Ghostty config maps shift+enter to ESC+CR and preserves Option+Arrow unbinds."""
     active_lines = [
         line.strip() for line in read(GHOSTTY_CONF).splitlines() if line.strip() and not line.lstrip().startswith("#")
     ]
     assert "keybind = alt+arrow_left=unbind" in active_lines
     assert "keybind = alt+arrow_right=unbind" in active_lines
+    assert "keybind = shift+enter=text:\\x1b\\r" in active_lines
     for line in active_lines:
-        if line.lower().startswith("keybind"):
-            assert "shift+enter" not in line.lower(), (
-                f"Ghostty config must not override native shift+enter reporting: {line}"
+        if line.lower().startswith("keybind") and "shift+enter" in line.lower():
+            assert not line.endswith(("=text:\\r", "=text:\\n", "=text:\\x0a")), (
+                f"Ghostty config must not map shift+enter to raw CR or LF (0x0a): {line}"
             )
+    decoded = _parse_ghostty_shift_enter_bytes()
+    assert decoded != b"\r", "Ghostty shift+enter must not decode to plain CR"
+    assert decoded != b"\n", "Ghostty shift+enter must not decode to raw LF (0x0a / Ctrl-J)"
+    assert decoded == b"\x1b\r", f"Expected Ghostty shift+enter to decode to ESC+CR (b'\\x1b\\r'), got {decoded!r}"
+
+
+def test_ghostty_config_validates_with_ghostty_cli() -> None:
+    """Verify Ghostty config passes ``ghostty +validate-config`` when Ghostty is installed."""
+    ghostty_bin = _find_ghostty_binary()
+    if ghostty_bin is None:
+        pytest.skip("ghostty not installed on test runner")
+
+    proc = subprocess.run(
+        [ghostty_bin, "+validate-config", f"--config-file={GHOSTTY_CONF}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, (
+        f"ghostty +validate-config exited {proc.returncode}:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert proc.stderr.strip() == "", (
+        f"ghostty +validate-config emitted stderr:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
 
 
 def test_tmux_conf_loads_cleanly_without_stderr() -> None:
@@ -365,3 +430,23 @@ def test_tmux_pty_shift_enter_and_enter_sequences(tmp_path: Path, term: str) -> 
 
     enter_captured = _run_tmux_pty_capture(tmux_bin, term, b"\r", tmp_path)
     assert enter_captured == b"\r", f"Plain Enter mutated to {enter_captured!r} for TERM={term}"
+
+
+@pytest.mark.parametrize("term", ["xterm-256color", "xterm-ghostty"])
+def test_tmux_pty_ghostty_shift_enter_esc_cr_round_trip(tmp_path: Path, term: str) -> None:
+    """Verify Ghostty's configured shift+enter ESC+CR sequence survives tmux's C-j binding intact."""
+    tmux_bin = _require_binary("tmux")
+    tmux_active_lines = [
+        line.strip() for line in read(TMUX_CONF).splitlines() if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert any(line.startswith("bind-key -n C-j ") for line in tmux_active_lines), (
+        f"Expected bind-key -n C-j in {TMUX_CONF} to verify ESC+CR bypasses vim-tmux-navigator C-j interception"
+    )
+
+    payload = _parse_ghostty_shift_enter_bytes()
+    assert payload == b"\x1b\r", f"Expected parsed Ghostty shift+enter payload b'\\x1b\\r', got {payload!r}"
+
+    captured = _run_tmux_pty_capture(tmux_bin, term, payload, tmp_path)
+    assert captured != b"", f"Ghostty shift+enter ESC+CR was swallowed (likely by C-j binding) for TERM={term}"
+    assert captured != b"\r", f"Ghostty shift+enter ESC+CR collapsed to plain CR for TERM={term}"
+    assert captured == b"\x1b\r", f"Unexpected Ghostty shift+enter capture {captured!r} for TERM={term}"
