@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-7ab97729",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-25T23:31:25.151198+00:00",
+  "updated_ts": "2026-11-25T23:31:25.151198+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-REV-1795647987-9c402ef9",
+      "ACT-REV-1795647983-ec6d956d"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795646845-ubuntu-wsl-ghostty-terminfo/P-1795646869-ANA-G4N/E-1795647071-ANA-G4N/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 evaluation for I-1795646845-ubuntu-wsl-ghostty-terminfo/P-1795646869-ANA-G4N/E-1795647071-ANA-G4N/_",
+    "symptoms": [
+      "Findings detected: ['FIND-CI-001']"
+    ]
+  }
+}
