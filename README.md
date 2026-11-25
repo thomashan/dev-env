@@ -177,7 +177,11 @@ remain real local folders:
 - `dotfiles/conda/` (**Python (Conda)**): `.condarc` (strict conda-forge channel configuration)
 - `dotfiles/fish/` (**Terminal / Shell (Fish)**): `config.fish`, `fish_plugins`, `conf.d/00-devenv.fish`
 - `dotfiles/ghostty/` (**Terminal / Emulator (Ghostty)**): `.config/ghostty/config.ghostty` (unbinds Option+Arrow keys
-  to prevent interception before tmux horizontal pane resizing)
+  to prevent interception before tmux horizontal pane resizing). In addition, the `dotfiles` role (`make converge` and
+  `make dotfiles`) compiles the canonical `xterm-ghostty` terminfo entry
+  (`ansible/roles/dotfiles/files/xterm-ghostty.terminfo`) into `~/.terminfo` without requiring root or Ghostty GUI
+  installation, so SSH sessions from macOS Ghostty (`TERM=xterm-ghostty`) into Ubuntu WSL (`devenv_is_wsl`) and headless
+  Linux hosts run `tmux` and ncurses tools cleanly.
 - `dotfiles/tmux/` (**Terminal / Multiplexer (tmux)**): `~/.tmux.conf` (mouse support, `vim-tmux-navigator` smart pane
   switching, current-path splits/windows, and `extended-keys` / `Shift+Enter` forwarding for multiline input in modern
   TUIs such as Claude Code across macOS and Windows/WSL)

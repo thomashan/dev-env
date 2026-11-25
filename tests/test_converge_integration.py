@@ -2,7 +2,8 @@
 
 Exercises real ``ansible-playbook`` execution against hermetic ``tmp_path`` homes for:
 1. ``dotfiles`` role + ``ansible/playbooks/unlink.yml`` roundtrip with real GNU ``stow``
-   and backup displacement of pre-existing unmanaged ``.bashrc`` and ``.zprofile``.
+   and backup displacement of pre-existing unmanaged ``.bashrc`` and ``.zprofile``, plus
+   ``xterm-ghostty`` terminfo converge, idempotence, and ``--check`` mode verification.
 2. ``node`` role clean-environment login-shell verification probes and assertions under
    a polluted parent environment (simulating ``nvm.fish`` / ``nvm.sh`` active during
    re-converge) as well as ``--check`` mode on an unbootstrapped empty ``$HOME``.
@@ -184,6 +185,156 @@ def test_ansible_dotfiles_stow_and_unlink_roundtrip(tmp_path: Path) -> None:
         )
     assert any(p.is_file() and p.name.endswith("__.bashrc") for p in backup_root.rglob("*"))
     assert any(p.is_file() and p.name.endswith("__.zprofile") for p in backup_root.rglob("*"))
+
+
+def test_ansible_dotfiles_ghostty_terminfo_converge_and_check_mode(tmp_path: Path) -> None:
+    """Run real ansible-playbook dotfiles role to verify xterm-ghostty terminfo converge, idempotence, and --check."""
+    ansible_playbook_bin = _require_binary("ansible-playbook")
+    _require_binary("stow")
+    _require_binary("tic")
+    infocmp_bin = _require_binary("infocmp")
+
+    fake_home = tmp_path / "terminfo_home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+
+    dotfiles_tasks: list[dict[str, Any]] = yaml.safe_load(
+        read(REPO_ROOT / "ansible" / "roles" / "dotfiles" / "tasks" / "main.yml")
+    )
+
+    playbook_path = tmp_path / "run_dotfiles_terminfo.yml"
+    playbook_content = [
+        {
+            "name": "Run dotfiles role for xterm-ghostty terminfo in hermetic HOME",
+            "hosts": "localhost",
+            "connection": "local",
+            "gather_facts": True,
+            "vars_files": [str(REPO_ROOT / "ansible" / "group_vars" / "all.yml")],
+            "vars": {
+                "devenv_repo_root": str(REPO_ROOT),
+                "devenv_is_wsl": True,
+                "devenv_install_gui_casks": False,
+            },
+            "tasks": dotfiles_tasks,
+        }
+    ]
+    playbook_path.write_text(yaml.safe_dump(playbook_content, sort_keys=False), encoding="utf-8")
+
+    env = {
+        **os.environ,
+        "HOME": str(fake_home),
+        "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+        "ANSIBLE_LOCAL_TEMP": str(tmp_path / ".ansible_tmp"),
+        "ANSIBLE_REMOTE_TEMP": str(tmp_path / ".ansible_remote_tmp"),
+        "ANSIBLE_FORCE_COLOR": "0",
+        "ANSIBLE_NOCOLOR": "1",
+    }
+    env.pop("TERMINFO", None)
+    env.pop("TERMINFO_DIRS", None)
+
+    pre_probe = subprocess.run(
+        [infocmp_bin, "xterm-ghostty"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    host_had_system_terminfo = pre_probe.returncode == 0
+
+    # First converge: compiles xterm-ghostty into fake_home/.terminfo (when absent system-wide)
+    proc1 = subprocess.run(
+        [
+            ansible_playbook_bin,
+            "-i",
+            "localhost,",
+            "-c",
+            "local",
+            "-e",
+            f"devenv_home={fake_home}",
+            str(playbook_path),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc1.returncode == 0, (
+        f"dotfiles terminfo converge failed ({proc1.returncode}).\nSTDOUT:\n{proc1.stdout}\nSTDERR:\n{proc1.stderr}"
+    )
+    assert "[DEPRECATION WARNING]" not in proc1.stderr, f"Deprecation warning:\n{proc1.stderr}"
+
+    post_probe = subprocess.run(
+        [infocmp_bin, "xterm-ghostty"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert post_probe.returncode == 0, (
+        f"HOME={fake_home} infocmp xterm-ghostty failed ({post_probe.returncode}).\n"
+        f"STDOUT:\n{post_probe.stdout}\nSTDERR:\n{post_probe.stderr}"
+    )
+    assert "xterm-ghostty" in post_probe.stdout
+
+    if not host_had_system_terminfo:
+        terminfo_dir = fake_home / ".terminfo"
+        assert terminfo_dir.is_dir(), f"Expected {terminfo_dir} to be created on converge"
+        compiled_entries = [p for p in terminfo_dir.rglob("*") if p.is_file() and p.name == "xterm-ghostty"]
+        assert compiled_entries, f"Expected compiled xterm-ghostty entry under {terminfo_dir}"
+
+    # Second converge: strict idempotence (changed=0)
+    proc2 = subprocess.run(
+        [
+            ansible_playbook_bin,
+            "-i",
+            "localhost,",
+            "-c",
+            "local",
+            "-e",
+            f"devenv_home={fake_home}",
+            str(playbook_path),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc2.returncode == 0, (
+        f"dotfiles terminfo second converge failed ({proc2.returncode}).\n"
+        f"STDOUT:\n{proc2.stdout}\nSTDERR:\n{proc2.stderr}"
+    )
+    assert "[DEPRECATION WARNING]" not in proc2.stderr
+    assert "changed=0" in proc2.stdout, f"Expected second converge to be idempotent (changed=0):\n{proc2.stdout}"
+
+    # --check mode against a fresh empty HOME must succeed without creating ~/.terminfo
+    empty_home = tmp_path / "empty_terminfo_home"
+    empty_home.mkdir(parents=True, exist_ok=True)
+    check_env = {**env, "HOME": str(empty_home)}
+    check_proc = subprocess.run(
+        [
+            ansible_playbook_bin,
+            "--check",
+            "-i",
+            "localhost,",
+            "-c",
+            "local",
+            "-e",
+            f"devenv_home={empty_home}",
+            str(playbook_path),
+        ],
+        cwd=REPO_ROOT,
+        env=check_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert check_proc.returncode == 0, (
+        f"dotfiles terminfo --check mode failed ({check_proc.returncode}).\n"
+        f"STDOUT:\n{check_proc.stdout}\nSTDERR:\n{check_proc.stderr}"
+    )
+    assert "[DEPRECATION WARNING]" not in check_proc.stderr
+    assert not (empty_home / ".terminfo").exists(), "--check mode must not create ~/.terminfo on disk"
 
 
 def test_ansible_node_clean_env_shell_verification_playbook(tmp_path: Path) -> None:
