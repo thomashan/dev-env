@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-3aeefb63",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-24T23:52:46.941636+00:00",
+  "updated_ts": "2026-11-24T23:52:46.941636+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1795563066-5c6f2995",
+      "ACT-FIND-1795563064-7a8d3cd3"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795561965-tmux-shift-enter-extkeys/P-1795561982-ANA-G4N/E-1795562204-ANA-G4N/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R3-001-01",
+    "symptoms": [
+      "_drain_fd can exit after idle_window (0.15s) before tmux attach-session emits any output, racing os.write(master_fd, payload) against tmux PTY setup; wait for output or client attachment before applying idle_window."
+    ]
+  }
+}

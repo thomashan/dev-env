@@ -40,13 +40,13 @@ jobs:
       - name: Sync dependencies
         run: uv sync --locked --extra test
 
-      - name: Install fish, zsh, and stow on Ubuntu
+      - name: Install fish, zsh, stow, and tmux on Ubuntu
         if: runner.os == 'Linux'
-        run: sudo apt update && sudo apt install -y fish zsh stow
+        run: sudo apt update && sudo apt install -y fish zsh stow tmux
 
-      - name: Install fish and stow on macOS
+      - name: Install fish, stow, and tmux on macOS
         if: runner.os == 'macOS'
-        run: brew install fish stow
+        run: brew install fish stow tmux
 
       - name: Run non-network unit tests
         run: uv run --extra test pytest -v -l --tb=short -m "not network"
