@@ -276,13 +276,17 @@ def test_ansible_dotfiles_ghostty_terminfo_converge_and_check_mode(tmp_path: Pat
     )
     assert "xterm-ghostty" in post_probe.stdout
 
+    compiled_stat_before: tuple[int, int] | None = None
     if not host_had_system_terminfo:
         terminfo_dir = fake_home / ".terminfo"
         assert terminfo_dir.is_dir(), f"Expected {terminfo_dir} to be created on converge"
         compiled_entries = [p for p in terminfo_dir.rglob("*") if p.is_file() and p.name == "xterm-ghostty"]
         assert compiled_entries, f"Expected compiled xterm-ghostty entry under {terminfo_dir}"
+        st = compiled_entries[0].stat()
+        compiled_stat_before = (st.st_ino, st.st_mtime_ns)
 
-    # Second converge: strict idempotence (changed=0)
+    # Second converge: verify terminfo tasks are strictly idempotent
+    # (GNU Stow --restow on Ubuntu may still report changed=1 for symlink restow).
     proc2 = subprocess.run(
         [
             ansible_playbook_bin,
@@ -305,7 +309,26 @@ def test_ansible_dotfiles_ghostty_terminfo_converge_and_check_mode(tmp_path: Pat
         f"STDOUT:\n{proc2.stdout}\nSTDERR:\n{proc2.stderr}"
     )
     assert "[DEPRECATION WARNING]" not in proc2.stderr
-    assert "changed=0" in proc2.stdout, f"Expected second converge to be idempotent (changed=0):\n{proc2.stdout}"
+    assert "TASK [Locate tic terminfo compiler]" in proc2.stdout, (
+        f"Expected terminfo tasks in second converge output:\n{proc2.stdout}"
+    )
+    terminfo_section = proc2.stdout.split("TASK [Locate tic terminfo compiler]", 1)[1].split("PLAY RECAP", 1)[0]
+    assert "changed:" not in terminfo_section, (
+        f"Expected terminfo tasks to be idempotent on second converge:\n{terminfo_section}"
+    )
+    assert "Ensure user terminfo directory exists for xterm-ghostty" not in terminfo_section, (
+        f"Expected terminfo directory task to be skipped on second converge:\n{terminfo_section}"
+    )
+    assert "Compile xterm-ghostty terminfo into user terminfo directory" not in terminfo_section, (
+        f"Expected terminfo compile task to be skipped on second converge:\n{terminfo_section}"
+    )
+    if compiled_stat_before is not None:
+        compiled_after = [p for p in (fake_home / ".terminfo").rglob("*") if p.is_file() and p.name == "xterm-ghostty"]
+        assert compiled_after, "Expected compiled xterm-ghostty entry to remain after second converge"
+        st_after = compiled_after[0].stat()
+        assert (st_after.st_ino, st_after.st_mtime_ns) == compiled_stat_before, (
+            "Expected compiled xterm-ghostty terminfo file to remain untouched on second converge"
+        )
 
     # --check mode against a fresh empty HOME must succeed without creating ~/.terminfo
     empty_home = tmp_path / "empty_terminfo_home"
