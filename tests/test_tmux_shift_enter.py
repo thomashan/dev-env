@@ -653,14 +653,22 @@ def test_tmux_pty_vertical_split_cj_moves_focus_in_plain_top_pane() -> None:
 def test_tmux_pty_vertical_split_cj_passes_through_in_agent_top_pane(tmp_path: Path) -> None:
     """Verify Warp Shift+Enter (0x0a) in a coding-agent top split pane stays focused and delivers 0x0a."""
     tmux_bin = _require_binary("tmux")
+    bash_bin = _require_binary("bash")
     case_dir = tmp_path / f"agent-split-{uuid.uuid4().hex[:8]}"
     case_dir.mkdir(parents=True, exist_ok=True)
     ready_file = case_dir / "ready"
     out_file = case_dir / "captured.bin"
 
     claude_bin = case_dir / "claude"
-    os.symlink(sys.executable, claude_bin)
-    top_cmd = shlex.join([str(claude_bin), "-c", _PANE_READER_SCRIPT, str(ready_file), str(out_file)])
+    os.symlink(bash_bin, claude_bin)
+    reader_cmd = shlex.join([sys.executable, "-c", _PANE_READER_SCRIPT, str(ready_file), str(out_file)])
+    # Keep the symlinked `claude` bash process alive on pane_tty instead of
+    # symlinking `sys.executable` directly: on macOS framework Python builds,
+    # `bin/python` is the `pythonw` stub which replaces argv[0] with
+    # `Python.app/Contents/MacOS/Python`, hiding `claude` from `ps -o args=`.
+    # The trailing `; rc=$?; exit "$rc"` prevents bash from exec-optimizing the
+    # single command away before the reader exits.
+    top_cmd = shlex.join([str(claude_bin), "-c", f'{reader_cmd}; rc=$?; exit "$rc"'])
 
     top_pane_id, _bottom_pane_id, active_pane_id, captured = _run_tmux_vertical_split_cj(
         tmux_bin,
