@@ -600,11 +600,16 @@ def test_dotfiles_contain_no_personal_paths():
 
 
 def test_tmux_conf_smart_pane_switching():
-    """Verify tmux configuration provides smart pane switching with is_vim process detection."""
+    """Verify tmux configuration provides smart pane switching with is_vim and agent process detection."""
     tmux_conf = read(REPO_ROOT / "dotfiles" / "tmux" / ".tmux.conf")
     assert "is_vim=" in tmux_conf
+    assert "is_vim_or_agent=" in tmux_conf
     assert "bind-key -n C-h if-shell \"$is_vim\" 'send-keys C-h' 'select-pane -L'" in tmux_conf
-    assert "bind-key -n C-j if-shell \"$is_vim\" 'send-keys C-j' 'select-pane -D'" in tmux_conf
+    expected_cj = (
+        "bind-key -n C-j if-shell -F '#{pane_at_bottom}' 'send-keys C-j' "
+        "\"if-shell \\\"$is_vim_or_agent\\\" 'send-keys C-j' 'select-pane -D'\""
+    )
+    assert expected_cj in tmux_conf
     assert "bind-key -n C-k if-shell \"$is_vim\" 'send-keys C-k' 'select-pane -U'" in tmux_conf
     assert "bind-key -n C-l if-shell \"$is_vim\" 'send-keys C-l' 'select-pane -R'" in tmux_conf
     assert "bind-key -T copy-mode-vi C-h select-pane -L" in tmux_conf

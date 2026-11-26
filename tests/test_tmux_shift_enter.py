@@ -1,4 +1,4 @@
-"""Static and live real-tmux PTY regression tests for Shift+Enter extended keys.
+"""Static and live real-tmux PTY regression tests for Shift+Enter and C-j passthrough.
 
 Verifies that:
 1. ``dotfiles/tmux/.tmux.conf`` configures ``extended-keys always``, quiet
@@ -8,11 +8,14 @@ Verifies that:
    extended-key reporting for ``shift+enter`` without rebinding it to a plain
    carriage return or raw newline.
 3. ``dotfiles/tmux/.tmux.conf`` loads cleanly with exit code 0 and empty stderr.
-4. Live real-tmux PTY sessions under both ``TERM=xterm-256color`` and
-   ``TERM=xterm-ghostty`` forward CSI-u and modifyOtherKeys Shift+Enter
-   sequences as distinct extended Shift+Enter sequences (never collapsing to
-   plain ``\\r``), preserve ``ESC+CR`` without collapsing to plain ``\\r``, and
-   keep plain Enter as ``\\r``.
+4. A universal cross-terminal real-tmux PTY matrix covering both Ghostty
+   (``TERM=xterm-ghostty`` and ``TERM=xterm-256color``) and Warp
+   (``TERM=xterm-256color``) delivers consistent Shift+Enter, Alt+Enter, and
+   plain Enter sequences without swallowing ``0x0a`` or collapsing modified
+   Enter to plain ``\\r``.
+5. Vertical split-pane real-tmux PTY sessions preserve ``select-pane -D`` on
+   plain non-agent top panes while forwarding ``0x0a`` (Warp Shift+Enter)
+   intact without moving focus on coding-agent (``claude``) top panes.
 """
 
 from __future__ import annotations
@@ -342,26 +345,263 @@ def test_tmux_conf_loads_cleanly_without_stderr() -> None:
         )
 
 
-@pytest.mark.parametrize("term", ["xterm-256color", "xterm-ghostty"])
-def test_tmux_pty_shift_enter_and_enter_sequences(tmp_path: Path, term: str) -> None:
-    """Verify real tmux PTY sessions forward Shift+Enter without collapsing to plain Enter."""
+@pytest.mark.parametrize(
+    ("terminal_name", "term", "shift_enter_payloads"),
+    [
+        ("ghostty", "xterm-ghostty", (b"\x1b[13;2u", b"\x1b[27;2;13~")),
+        ("ghostty", "xterm-256color", (b"\x1b[13;2u", b"\x1b[27;2;13~")),
+        ("warp", "xterm-256color", (b"\x0a", b"\x1b[13;2u")),
+    ],
+)
+def test_tmux_pty_cross_terminal_enter_matrix(
+    tmp_path: Path,
+    terminal_name: str,
+    term: str,
+    shift_enter_payloads: tuple[bytes, ...],
+) -> None:
+    """Verify Ghostty and Warp Shift+Enter, Alt+Enter, and Enter behave consistently in real tmux."""
     tmux_bin = _require_binary("tmux")
 
-    csi_u_captured = _run_tmux_pty_capture(tmux_bin, term, b"\x1b[13;2u", tmp_path)
-    assert csi_u_captured != b"\r", f"CSI-u Shift+Enter collapsed to plain CR for TERM={term}"
-    assert csi_u_captured in EXTENDED_SHIFT_ENTER_SEQUENCES, (
-        f"Unexpected CSI-u Shift+Enter capture {csi_u_captured!r} for TERM={term}"
-    )
+    for payload in shift_enter_payloads:
+        captured = _run_tmux_pty_capture(tmux_bin, term, payload, tmp_path)
+        assert captured != b"", f"{terminal_name} Shift+Enter ({payload!r}) was swallowed for TERM={term}"
+        assert captured != b"\r", f"{terminal_name} Shift+Enter ({payload!r}) collapsed to plain CR for TERM={term}"
+        if payload == b"\x0a":
+            assert captured == b"\x0a", f"{terminal_name} Shift+Enter LF mutated to {captured!r} for TERM={term}"
+        elif payload in EXTENDED_SHIFT_ENTER_SEQUENCES:
+            assert captured in EXTENDED_SHIFT_ENTER_SEQUENCES, (
+                f"Unexpected {terminal_name} Shift+Enter capture {captured!r} for TERM={term}"
+            )
 
-    modify_other_keys_captured = _run_tmux_pty_capture(tmux_bin, term, b"\x1b[27;2;13~", tmp_path)
-    assert modify_other_keys_captured != b"\r", f"modifyOtherKeys Shift+Enter collapsed to plain CR for TERM={term}"
-    assert modify_other_keys_captured in EXTENDED_SHIFT_ENTER_SEQUENCES, (
-        f"Unexpected modifyOtherKeys Shift+Enter capture {modify_other_keys_captured!r} for TERM={term}"
-    )
-
-    esc_cr_captured = _run_tmux_pty_capture(tmux_bin, term, b"\x1b\r", tmp_path)
-    assert esc_cr_captured != b"\r", f"ESC+CR collapsed to plain CR for TERM={term}"
-    assert esc_cr_captured.startswith(b"\x1b"), f"ESC+CR lost leading ESC ({esc_cr_captured!r}) for TERM={term}"
+    for alt_payload in (b"\x1b\r", b"\x1b[13;3u"):
+        alt_captured = _run_tmux_pty_capture(tmux_bin, term, alt_payload, tmp_path)
+        assert alt_captured != b"", f"{terminal_name} Alt+Enter ({alt_payload!r}) was swallowed for TERM={term}"
+        assert alt_captured != b"\r", (
+            f"{terminal_name} Alt+Enter ({alt_payload!r}) collapsed to plain CR for TERM={term}"
+        )
+        assert alt_captured.startswith(b"\x1b"), (
+            f"{terminal_name} Alt+Enter ({alt_payload!r}) lost leading ESC ({alt_captured!r}) for TERM={term}"
+        )
 
     enter_captured = _run_tmux_pty_capture(tmux_bin, term, b"\r", tmp_path)
-    assert enter_captured == b"\r", f"Plain Enter mutated to {enter_captured!r} for TERM={term}"
+    assert enter_captured == b"\r", f"{terminal_name} plain Enter mutated to {enter_captured!r} for TERM={term}"
+
+
+def _display_tmux_format(tmux_bin: str, socket_name: str, env: dict[str, str], fmt: str) -> str:
+    """Query a tmux format string from the test session."""
+    proc = subprocess.run(
+        [tmux_bin, "-L", socket_name, "display-message", "-p", "-t", "test", fmt],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, (
+        f"tmux display-message failed ({proc.returncode}):\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    return proc.stdout.strip()
+
+
+def _run_tmux_vertical_split_cj(
+    tmux_bin: str,
+    top_cmd: str,
+    *,
+    ready_file: Path | None = None,
+    out_file: Path | None = None,
+    expect_focus_move: bool,
+) -> tuple[str, str, str, bytes | None]:
+    """Send 0x0a (C-j) to the active top pane of a vertical split and return pane IDs and captured bytes."""
+    socket_name = f"devenv-split-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    env = _clean_tmux_env("xterm-256color")
+
+    master_fd: int | None = None
+    slave_fd: int | None = None
+    client_proc: subprocess.Popen[bytes] | None = None
+
+    try:
+        top_proc = subprocess.run(
+            [
+                tmux_bin,
+                "-L",
+                socket_name,
+                "-f",
+                str(TMUX_CONF),
+                "new-session",
+                "-d",
+                "-s",
+                "test",
+                "-x",
+                "80",
+                "-y",
+                "24",
+                "-P",
+                "-F",
+                "#{pane_id}",
+                top_cmd,
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert top_proc.returncode == 0, (
+            f"tmux new-session failed ({top_proc.returncode}):\nSTDOUT:\n{top_proc.stdout}\nSTDERR:\n{top_proc.stderr}"
+        )
+        top_pane_id = top_proc.stdout.strip()
+
+        if ready_file is not None:
+            ready_deadline = time.monotonic() + 5.0
+            while not ready_file.exists() and time.monotonic() < ready_deadline:
+                time.sleep(0.02)
+            assert ready_file.exists(), "Top pane reader did not signal ready within 5s"
+
+        split_proc = subprocess.run(
+            [
+                tmux_bin,
+                "-L",
+                socket_name,
+                "split-window",
+                "-v",
+                "-t",
+                "test",
+                "-P",
+                "-F",
+                "#{pane_id}",
+                "sleep 30",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert split_proc.returncode == 0, (
+            f"tmux split-window failed ({split_proc.returncode}):\n"
+            f"STDOUT:\n{split_proc.stdout}\nSTDERR:\n{split_proc.stderr}"
+        )
+        bottom_pane_id = split_proc.stdout.strip()
+        assert bottom_pane_id != top_pane_id, "split-window -v did not create a distinct bottom pane"
+
+        focus_proc = subprocess.run(
+            [tmux_bin, "-L", socket_name, "select-pane", "-t", top_pane_id],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert focus_proc.returncode == 0, (
+            f"tmux select-pane failed ({focus_proc.returncode}):\n"
+            f"STDOUT:\n{focus_proc.stdout}\nSTDERR:\n{focus_proc.stderr}"
+        )
+
+        pane_state = _display_tmux_format(tmux_bin, socket_name, env, "#{pane_id} #{pane_at_bottom}")
+        assert pane_state == f"{top_pane_id} 0", f"Expected active top pane with pane_at_bottom=0, got {pane_state!r}"
+
+        master_fd, slave_fd = pty.openpty()
+        client_proc = subprocess.Popen(
+            [tmux_bin, "-L", socket_name, "attach-session", "-t", "test"],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            env=env,
+            start_new_session=True,
+        )
+        os.close(slave_fd)
+        slave_fd = None
+
+        _drain_fd(master_fd, max_duration=2.0, idle_window=0.15)
+        assert client_proc.poll() is None, f"tmux attach-session exited early ({client_proc.returncode})"
+
+        os.write(master_fd, b"\x0a")
+
+        captured: bytes | None = None
+        if expect_focus_move:
+            active_pane_id = top_pane_id
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select([master_fd], [], [], 0.05)
+                if ready:
+                    try:
+                        os.read(master_fd, 4096)
+                    except OSError:
+                        break
+                active_pane_id = _display_tmux_format(tmux_bin, socket_name, env, "#{pane_id}")
+                if active_pane_id == bottom_pane_id:
+                    break
+            return top_pane_id, bottom_pane_id, active_pane_id, captured
+
+        assert out_file is not None
+        deadline = time.monotonic() + 5.0
+        while not out_file.exists() and time.monotonic() < deadline:
+            ready, _, _ = select.select([master_fd], [], [], 0.05)
+            if ready:
+                try:
+                    os.read(master_fd, 4096)
+                except OSError:
+                    break
+        assert out_file.exists(), "Coding-agent top pane did not capture 0x0a within 5s"
+        captured = out_file.read_bytes()
+        active_pane_id = _display_tmux_format(tmux_bin, socket_name, env, "#{pane_id}")
+        return top_pane_id, bottom_pane_id, active_pane_id, captured
+    finally:
+        if client_proc is not None and client_proc.poll() is None:
+            client_proc.terminate()
+            try:
+                client_proc.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                client_proc.kill()
+                client_proc.wait(timeout=2.0)
+        if master_fd is not None:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+        if slave_fd is not None:
+            try:
+                os.close(slave_fd)
+            except OSError:
+                pass
+        subprocess.run(
+            [tmux_bin, "-L", socket_name, "kill-server"],
+            env=env,
+            capture_output=True,
+            check=False,
+        )
+
+
+def test_tmux_pty_vertical_split_cj_moves_focus_in_plain_top_pane() -> None:
+    """Verify C-j (0x0a) in a plain non-agent top split pane still switches focus to the bottom pane."""
+    tmux_bin = _require_binary("tmux")
+    top_pane_id, bottom_pane_id, active_pane_id, _ = _run_tmux_vertical_split_cj(
+        tmux_bin,
+        "sleep 30",
+        expect_focus_move=True,
+    )
+    assert active_pane_id == bottom_pane_id, (
+        f"Expected C-j in plain top split pane {top_pane_id} to switch focus to {bottom_pane_id}, "
+        f"but active pane remained {active_pane_id}"
+    )
+
+
+def test_tmux_pty_vertical_split_cj_passes_through_in_agent_top_pane(tmp_path: Path) -> None:
+    """Verify Warp Shift+Enter (0x0a) in a coding-agent top split pane stays focused and delivers 0x0a."""
+    tmux_bin = _require_binary("tmux")
+    case_dir = tmp_path / f"agent-split-{uuid.uuid4().hex[:8]}"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    ready_file = case_dir / "ready"
+    out_file = case_dir / "captured.bin"
+
+    claude_bin = case_dir / "claude"
+    os.symlink(sys.executable, claude_bin)
+    top_cmd = shlex.join([str(claude_bin), "-c", _PANE_READER_SCRIPT, str(ready_file), str(out_file)])
+
+    top_pane_id, _bottom_pane_id, active_pane_id, captured = _run_tmux_vertical_split_cj(
+        tmux_bin,
+        top_cmd,
+        ready_file=ready_file,
+        out_file=out_file,
+        expect_focus_move=False,
+    )
+    assert captured == b"\x0a", f"Expected coding-agent top pane to receive 0x0a, got {captured!r}"
+    assert active_pane_id == top_pane_id, (
+        f"Expected focus to stay on coding-agent top pane {top_pane_id}, but moved to {active_pane_id}"
+    )
