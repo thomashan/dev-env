@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-097735ff",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-26T05:23:22.898442+00:00",
+  "updated_ts": "2026-11-26T05:23:22.898442+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1795665604-a87607a3",
+      "ACT-FIND-1795665601-c67b055a"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795649541-warp-shift-enter-tmux-cj/P-1795649564-ANA-G4N/E-1795664858-ANA-G4N/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R1-001-01",
+    "symptoms": [
+      "Race condition in _run_tmux_vertical_split_cj: _PANE_READER_SCRIPT exits right after writing out_file, allowing tmux to close top_pane_id and shift focus to bottom_pane_id before #{pane_id} is queried; enable remain-on-exit on for the test session before sending 0x0a."
+    ]
+  }
+}

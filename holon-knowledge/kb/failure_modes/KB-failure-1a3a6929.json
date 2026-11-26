@@ -1,0 +1,31 @@
+{
+  "kb_id": "KB-failure-1a3a6929",
+  "kb_type": "failure_mode",
+  "version": "1.0",
+  "created_ts": "2026-11-26T05:23:22.899982+00:00",
+  "updated_ts": "2026-11-26T05:23:22.899982+00:00",
+  "created_by": "holon-promotion-engine",
+  "status": "active",
+  "evidence": {
+    "ledger_refs": [
+      "ACT-FIND-1795665604-1a4e0038",
+      "ACT-FIND-1795665601-8380651d"
+    ],
+    "success_count": 0,
+    "failure_count": 2,
+    "ladder_state": "repeated"
+  },
+  "tags": [
+    "code",
+    "veto"
+  ],
+  "human_approved": false,
+  "payload": {
+    "name": "Failure mode in I-1795649541-warp-shift-enter-tmux-cj/P-1795649564-ANA-G4N/E-1795664858-ANA-G4N/_",
+    "description": "Reproduced failure across 2 executions with identical context.",
+    "action": "Review Loop iteration 1 finding detected: FIND-R2-001-01",
+    "symptoms": [
+      "Nested double-quoted if-shell strips backslashes in is_vim_or_agent at runtime, turning (\\S+\\/)? into (S+/)? and breaking full-path comm matching on macOS; use ([^[:space:]]+/)? instead."
+    ]
+  }
+}
