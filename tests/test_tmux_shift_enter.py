@@ -449,6 +449,18 @@ def _run_tmux_vertical_split_cj(
         )
         top_pane_id = top_proc.stdout.strip()
 
+        remain_proc = subprocess.run(
+            [tmux_bin, "-L", socket_name, "set-window-option", "-t", "test", "remain-on-exit", "on"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert remain_proc.returncode == 0, (
+            f"tmux set-window-option remain-on-exit failed ({remain_proc.returncode}):\n"
+            f"STDOUT:\n{remain_proc.stdout}\nSTDERR:\n{remain_proc.stderr}"
+        )
+
         if ready_file is not None:
             ready_deadline = time.monotonic() + 5.0
             while not ready_file.exists() and time.monotonic() < ready_deadline:
