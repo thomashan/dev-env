@@ -209,3 +209,70 @@
   loop_control:
     label: "{{ item.item.dest }}"
   when: not ansible_check_mode
+
+# Compile the canonical xterm-ghostty terminfo entry into ~/.terminfo so SSH
+# sessions from macOS Ghostty (TERM=xterm-ghostty) into Ubuntu WSL and headless
+# Linux hosts run tmux and ncurses tools cleanly without root or GUI casks.
+- name: Locate tic terminfo compiler
+  ansible.builtin.command:
+    cmd: which tic
+  register: devenv_tic_bin
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check whether xterm-ghostty terminfo is available
+  ansible.builtin.command:
+    cmd: infocmp xterm-ghostty
+  environment:
+    HOME: "{{ devenv_home }}"
+  register: devenv_ghostty_terminfo_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Ensure user terminfo directory exists for xterm-ghostty
+  ansible.builtin.file:
+    path: "{{ devenv_home }}/.terminfo"
+    state: directory
+    mode: "0755"
+  when:
+    - devenv_ghostty_terminfo_check.rc != 0
+    - devenv_tic_bin.rc == 0
+
+- name: Compile xterm-ghostty terminfo into user terminfo directory
+  ansible.builtin.command:
+    cmd: >-
+      tic -x -o "{{ devenv_home }}/.terminfo"
+      "{{ devenv_repo_root }}/ansible/roles/dotfiles/files/xterm-ghostty.terminfo"
+  changed_when: true
+  when:
+    - devenv_ghostty_terminfo_check.rc != 0
+    - devenv_tic_bin.rc == 0
+    - not ansible_check_mode
+
+- name: Verify xterm-ghostty terminfo resolves after compilation
+  ansible.builtin.command:
+    cmd: infocmp xterm-ghostty
+  environment:
+    HOME: "{{ devenv_home }}"
+  register: devenv_ghostty_terminfo_verify
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - devenv_tic_bin.rc == 0
+
+- name: Assert xterm-ghostty terminfo is available
+  ansible.builtin.assert:
+    that:
+      - devenv_ghostty_terminfo_verify.rc == 0
+    fail_msg: >-
+      xterm-ghostty terminfo could not be resolved after compilation
+      (rc={{ devenv_ghostty_terminfo_verify.rc | default('unknown') }},
+      stderr={{ devenv_ghostty_terminfo_verify.stderr | default('') }}).
+    quiet: true
+  when:
+    - not ansible_check_mode
+    - devenv_tic_bin.rc == 0
