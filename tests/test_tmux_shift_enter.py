@@ -295,6 +295,62 @@ def test_tmux_conf_extended_keys_directives() -> None:
     assert "set -as terminal-features 'xterm*:extkeys'" in active_lines
 
 
+def test_tmux_conf_is_vim_or_agent_matches_args_cross_platform() -> None:
+    """Verify is_vim_or_agent uses wide ps args and matches symlinked/long-path agents without false positives."""
+    tmux_conf = read(TMUX_CONF)
+    assert "ps -ww -o state= -o args= -t '#{pane_tty}'" in tmux_conf
+
+    regex = (
+        "^[^TXZ ]+ +([^[:space:]]+/)?"
+        "(g?(view|l?n?vim?x?|diff)|claude|codex|agy|antigravity|opencode|pi|node)([[:space:]]|$)"
+    )
+    assert f"grep -iqE '{regex}'" in tmux_conf
+
+    grep_bin = shutil.which("grep")
+    if grep_bin is None:
+        pytest.skip("grep not installed in local/sandbox environment")
+
+    positive_samples = [
+        "S+   claude",
+        "Ss+  /Users/runner/.local/bin/claude --resume",
+        (
+            "S+   /private/var/folders/q2/p1t6rgxj5fj32g1dc7dmd49r0000gn/T/pytest-of-runner/"
+            "pytest-0/test_tmux_pty_vertical_split_c0/agent-split-88f11d48/claude -c import sys"
+        ),
+        "S+   /opt/homebrew/bin/node /opt/homebrew/bin/codex",
+        "S+   nvim dotfiles/tmux/.tmux.conf",
+        "R+   /usr/local/bin/opencode",
+    ]
+    for sample in positive_samples:
+        proc = subprocess.run(
+            [grep_bin, "-iqE", regex],
+            input=f"{sample}\n",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert proc.returncode == 0, f"Expected is_vim_or_agent regex to match {sample!r}"
+
+    negative_samples = [
+        "S+   sleep 30",
+        "Ss   -zsh",
+        "S+   /bin/cat claude.md",
+        "S+   grep claude notes.txt",
+        "S+   claude-helper --flag",
+        "T+   claude",
+        "Z    claude",
+    ]
+    for sample in negative_samples:
+        proc = subprocess.run(
+            [grep_bin, "-iqE", regex],
+            input=f"{sample}\n",
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert proc.returncode == 1, f"Expected is_vim_or_agent regex NOT to match {sample!r}"
+
+
 def test_ghostty_config_preserves_native_shift_enter() -> None:
     """Verify Ghostty config preserves native shift+enter reporting and Option+Arrow unbinds."""
     active_lines = [
